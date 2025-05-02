@@ -1,12 +1,15 @@
-import React, { useState } from 'react';
-import { ArrowRight } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowRight, AlertCircle } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
+import { Alert, AlertDescription } from '../components/ui/alert';
 import VoiceInput from '../components/voice/VoiceInput';
+import { voiceService } from '../services/api';
 
 export default function CreateInvoicePage() {
   const [transcript, setTranscript] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [parsedData, setParsedData] = useState<null | {
     client: string;
     service: string;
@@ -26,22 +29,14 @@ export default function CreateInvoicePage() {
     if (!transcript.trim()) return;
 
     setIsProcessing(true);
+    setError(null);
     
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      setParsedData({
-        client: "Max Mustermann",
-        service: "Massage",
-        quantity: 3,
-        unit_price: 80,
-        tax_rate: 0.2,
-        invoice_date: "2025-05-02",
-        currency: "EUR",
-        language: "de"
-      });
-    } catch (error) {
-      console.error('Error processing voice input:', error);
+      const parsedResult = await voiceService.parseVoiceTranscript(transcript);
+      setParsedData(parsedResult);
+    } catch (err) {
+      console.error('Error processing voice input:', err);
+      setError('Fehler bei der Verarbeitung der Spracheingabe. Bitte versuchen Sie es erneut.');
     } finally {
       setIsProcessing(false);
     }
@@ -70,6 +65,13 @@ export default function CreateInvoicePage() {
                 {!isProcessing && <ArrowRight className="h-4 w-4" />}
               </Button>
             </div>
+          )}
+          
+          {error && (
+            <Alert variant="destructive" className="mt-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           )}
         </section>
 
