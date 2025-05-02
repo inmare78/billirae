@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import VerifyEmailPage from './pages/VerifyEmailPage';
 import CreateInvoicePage from './pages/CreateInvoicePage';
+import ProfilePage from './pages/ProfilePage';
 import './App.css';
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/verify-email/:token" element={<VerifyEmailPage />} />
           <Route path="/create-invoice" element={<CreateInvoicePage />} />
+          <Route path="/profile" element={<ProfilePage />} />
           <Route path="*" element={<div className="text-center py-12"><h1 className="text-2xl font-bold">404 - Seite nicht gefunden</h1></div>} />
         </Routes>
       </Layout>

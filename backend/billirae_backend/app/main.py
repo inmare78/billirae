@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
 
-from .api import voice
+from .api import api_router
 
 app = FastAPI(
     title="Billirae API",
@@ -18,7 +18,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(voice.router, prefix="/api/voice", tags=["voice"])
+app.include_router(api_router, prefix="/api")
 
 @app.get("/")
 async def root():
