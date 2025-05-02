@@ -393,7 +393,7 @@ class PDFService:
                 [Paragraph("Absender:", self.styles['InvoiceSubtitle']), Paragraph("Empfänger:", self.styles['InvoiceSubtitle'])],
                 [
                     Paragraph(
-                        f"{user_data.get('company_name') or f'{user_data.get(\"first_name\", \"\")} {user_data.get(\"last_name\", \"\")}'}<br/>"
+                        f"{user_data.get('company_name') or f'{user_data.get('first_name', '')} {user_data.get('last_name', '')}'}<br/>"
                         f"{user_data.get('address', '')}<br/>"
                         f"{user_data.get('postal_code', '')} {user_data.get('city', '')}<br/>"
                         f"{user_data.get('country', '')}",
@@ -478,7 +478,7 @@ class PDFService:
             
             payment_info = [
                 [Paragraph("Zahlungsinformationen:", self.styles['InvoiceSubtitle'])],
-                [Paragraph(f"Kontoinhaber: {user_data.get('company_name') or f'{user_data.get(\"first_name\", \"\")} {user_data.get(\"last_name\", \"\")}'}", self.styles['InvoiceInfo'])],
+                [Paragraph(f"Kontoinhaber: {user_data.get('company_name') or f'{user_data.get('first_name', '')} {user_data.get('last_name', '')}'}", self.styles['InvoiceInfo'])],
                 [Paragraph(f"IBAN: {user_data.get('bank_iban', '')}", self.styles['InvoiceInfo'])],
             ]
             
@@ -499,7 +499,7 @@ class PDFService:
             try:
                 qr_data = (
                     f"BCD\n001\n1\nSCT\n{user_data.get('bank_bic', '')}\n"
-                    f"{user_data.get('company_name') or f'{user_data.get(\"first_name\", \"\")} {user_data.get(\"last_name\", \"\")}'}\n"
+                    f"{user_data.get('company_name') or f'{user_data.get('first_name', '')} {user_data.get('last_name', '')}'}\n"
                     f"{user_data.get('bank_iban', '')}\nEUR{invoice_data.get('total', 0)}\n\n\n"
                     f"Rechnung {invoice_data.get('invoice_number', 'TEST')}"
                 )
