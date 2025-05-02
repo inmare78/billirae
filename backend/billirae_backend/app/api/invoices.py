@@ -3,12 +3,12 @@ from pydantic import BaseModel, EmailStr, Field
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
-from ..db.models.invoice import InvoiceInDB
-from ..db.models.user import UserInDB
-from ..db.models.client import ClientInDB
-from ..services.pdf_service import PDFService
-from ..services.email_service import EmailService
-from ..core.security import get_current_user
+from billirae_backend.app.db.models.invoice import InvoiceInDB
+from billirae_backend.app.db.models.user import UserInDB
+from billirae_backend.app.db.models.client import ClientInDB
+from billirae_backend.app.services.pdf_service import PDFService
+from billirae_backend.app.services.email_service import EmailService
+from billirae_backend.app.core.security import get_current_user
 
 router = APIRouter()
 pdf_service = PDFService()

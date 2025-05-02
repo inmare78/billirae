@@ -13,10 +13,10 @@ from reportlab.platypus.flowables import Flowable
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
-from ..db.models.invoice import InvoiceInDB
-from ..db.models.user import UserInDB
-from ..db.models.client import ClientInDB
-from ..core.config import settings
+from billirae_backend.app.db.models.invoice import InvoiceInDB
+from billirae_backend.app.db.models.user import UserInDB
+from billirae_backend.app.db.models.client import ClientInDB
+from billirae_backend.app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
