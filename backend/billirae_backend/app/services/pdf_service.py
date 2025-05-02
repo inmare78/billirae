@@ -347,3 +347,211 @@ class PDFService:
         except Exception as e:
             logger.error(f"Error generating PDF for invoice {invoice.invoice_number}: {str(e)}")
             raise
+            
+    async def generate_invoice_pdf_mock(
+        self,
+        invoice_data: Dict[str, Any],
+        user_data: Dict[str, Any],
+        client_data: Dict[str, Any]
+    ) -> bytes:
+        """
+        Generate a PDF invoice using mock data (for testing).
+        
+        Args:
+            invoice_data: Dictionary with invoice data
+            user_data: Dictionary with user data (sender)
+            client_data: Dictionary with client data (recipient)
+            
+        Returns:
+            PDF file as bytes
+        """
+        try:
+            logger.info(f"Generating mock PDF for invoice {invoice_data.get('invoice_number', 'TEST')}")
+            
+            buffer = io.BytesIO()
+            doc = SimpleDocTemplate(
+                buffer,
+                pagesize=A4,
+                rightMargin=72,
+                leftMargin=72,
+                topMargin=72,
+                bottomMargin=72,
+                title=f"Rechnung {invoice_data.get('invoice_number', 'TEST')}",
+                author=user_data.get('company_name') or f"{user_data.get('first_name', '')} {user_data.get('last_name', '')}",
+                subject=f"Rechnung für {client_data.get('name', '')}"
+            )
+            
+            content = []
+            
+            if invoice_data.get('status') == "draft":
+                content.append(Watermark("ENTWURF"))
+            
+            content.append(Paragraph(f"Rechnung Nr. {invoice_data.get('invoice_number', 'TEST')}", self.styles['InvoiceTitle']))
+            content.append(Spacer(1, 12))
+            
+            sender_info = [
+                [Paragraph("Absender:", self.styles['InvoiceSubtitle']), Paragraph("Empfänger:", self.styles['InvoiceSubtitle'])],
+                [
+                    Paragraph(
+                        f"{user_data.get('company_name') or f'{user_data.get(\"first_name\", \"\")} {user_data.get(\"last_name\", \"\")}'}<br/>"
+                        f"{user_data.get('address', '')}<br/>"
+                        f"{user_data.get('postal_code', '')} {user_data.get('city', '')}<br/>"
+                        f"{user_data.get('country', '')}",
+                        self.styles['InvoiceInfo']
+                    ),
+                    Paragraph(
+                        f"{client_data.get('name', '')}<br/>"
+                        f"{client_data.get('address', '')}",
+                        self.styles['InvoiceInfo']
+                    )
+                ]
+            ]
+            
+            sender_recipient_table = Table(sender_info, colWidths=[doc.width/2.0]*2)
+            sender_recipient_table.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ]))
+            content.append(sender_recipient_table)
+            content.append(Spacer(1, 24))
+            
+            invoice_date = invoice_data.get('invoice_date', datetime.now()).strftime("%d.%m.%Y") if isinstance(invoice_data.get('invoice_date'), datetime) else datetime.now().strftime("%d.%m.%Y")
+            due_date = invoice_data.get('due_date', datetime.now()).strftime("%d.%m.%Y") if isinstance(invoice_data.get('due_date'), datetime) else "14 Tage nach Erhalt"
+            
+            invoice_details = [
+                ["Rechnungsdatum:", invoice_date],
+                ["Fälligkeitsdatum:", due_date],
+            ]
+            
+            if user_data.get('tax_id'):
+                invoice_details.append(["Steuernummer:", user_data.get('tax_id')])
+            
+            if user_data.get('vat_id'):
+                invoice_details.append(["USt-IdNr.:", user_data.get('vat_id')])
+            
+            invoice_details_table = Table(invoice_details, colWidths=[doc.width/4.0, doc.width*3/4.0])
+            invoice_details_table.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('TOPPADDING', (0, 0), (-1, -1), 3),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ]))
+            content.append(invoice_details_table)
+            content.append(Spacer(1, 24))
+            
+            items_data = [["Leistung", "Menge", "Einzelpreis", "MwSt.", "Gesamt"]]
+            
+            for item in invoice_data.get('items', []):
+                tax_percent = f"{item.get('tax_rate', 0) * 100:.0f}%"
+                item_total = item.get('quantity', 0) * item.get('unit_price', 0)
+                items_data.append([
+                    item.get('service', ''),
+                    str(item.get('quantity', 0)),
+                    f"{item.get('unit_price', 0):.2f} €",
+                    tax_percent,
+                    f"{item_total:.2f} €"
+                ])
+            
+            items_data.append(["", "", "", "Zwischensumme:", f"{invoice_data.get('subtotal', 0):.2f} €"])
+            items_data.append(["", "", "", "MwSt.:", f"{invoice_data.get('tax_amount', 0):.2f} €"])
+            items_data.append(["", "", "", "Gesamtbetrag:", f"{invoice_data.get('total', 0):.2f} €"])
+            
+            items_table = Table(items_data, colWidths=[doc.width*0.4, doc.width*0.1, doc.width*0.15, doc.width*0.15, doc.width*0.2])
+            items_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
+                ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('BACKGROUND', (0, 1), (-1, -4), colors.white),
+                ('TEXTCOLOR', (0, 1), (-1, -1), colors.black),
+                ('ALIGN', (1, 1), (-1, -1), 'RIGHT'),
+                ('FONTNAME', (0, -3), (-1, -1), 'Helvetica-Bold'),
+                ('LINEBELOW', (0, 0), (-1, 0), 1, colors.black),
+                ('LINEABOVE', (0, -3), (-1, -3), 1, colors.black),
+                ('LINEBELOW', (0, -1), (-1, -1), 1, colors.black),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ]))
+            content.append(items_table)
+            content.append(Spacer(1, 24))
+            
+            payment_info = [
+                [Paragraph("Zahlungsinformationen:", self.styles['InvoiceSubtitle'])],
+                [Paragraph(f"Kontoinhaber: {user_data.get('company_name') or f'{user_data.get(\"first_name\", \"\")} {user_data.get(\"last_name\", \"\")}'}", self.styles['InvoiceInfo'])],
+                [Paragraph(f"IBAN: {user_data.get('bank_iban', '')}", self.styles['InvoiceInfo'])],
+            ]
+            
+            if user_data.get('bank_bic'):
+                payment_info.append([Paragraph(f"BIC: {user_data.get('bank_bic')}", self.styles['InvoiceInfo'])])
+            
+            if user_data.get('bank_name'):
+                payment_info.append([Paragraph(f"Bank: {user_data.get('bank_name')}", self.styles['InvoiceInfo'])])
+            
+            payment_table = Table(payment_info, colWidths=[doc.width])
+            payment_table.setStyle(TableStyle([
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('TOPPADDING', (0, 0), (-1, -1), 3),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ]))
+            content.append(payment_table)
+            
+            try:
+                qr_data = (
+                    f"BCD\n001\n1\nSCT\n{user_data.get('bank_bic', '')}\n"
+                    f"{user_data.get('company_name') or f'{user_data.get(\"first_name\", \"\")} {user_data.get(\"last_name\", \"\")}'}\n"
+                    f"{user_data.get('bank_iban', '')}\nEUR{invoice_data.get('total', 0)}\n\n\n"
+                    f"Rechnung {invoice_data.get('invoice_number', 'TEST')}"
+                )
+                
+                qr_table_data = [
+                    [QRCodeFlowable(qr_data), 
+                     Paragraph("Scannen Sie diesen QR-Code mit Ihrer Banking-App, um die Zahlung zu tätigen.", 
+                              self.styles['InvoiceInfo'])]
+                ]
+                
+                qr_table = Table(qr_table_data, colWidths=[40*mm, doc.width - 40*mm - 10])
+                qr_table.setStyle(TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('TOPPADDING', (0, 0), (-1, -1), 10),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+                ]))
+                
+                content.append(Spacer(1, 12))
+                content.append(qr_table)
+            except Exception as e:
+                logger.warning(f"Could not generate payment QR code: {str(e)}")
+            
+            content.append(Spacer(1, 24))
+            
+            if invoice_data.get('notes'):
+                content.append(Paragraph("Anmerkungen:", self.styles['InvoiceSubtitle']))
+                content.append(Paragraph(invoice_data.get('notes'), self.styles['InvoiceInfo']))
+                content.append(Spacer(1, 24))
+            
+            legal_text = (
+                "Gemäß § 19 UStG enthält der ausgewiesene Betrag keine Umsatzsteuer. "
+                "Bitte überweisen Sie den Gesamtbetrag bis zum Fälligkeitsdatum. "
+                "Vielen Dank für Ihr Vertrauen."
+            )
+            
+            if user_data.get('is_small_business'):
+                legal_text = (
+                    "Gemäß § 19 UStG enthält der ausgewiesene Betrag keine Umsatzsteuer. "
+                    "Bitte überweisen Sie den Gesamtbetrag bis zum Fälligkeitsdatum. "
+                    "Vielen Dank für Ihr Vertrauen."
+                )
+            
+            content.append(Paragraph(legal_text, self.styles['Footer']))
+            
+            content.append(PageNumberFooter())
+            
+            doc.build(content)
+            pdf_bytes = buffer.getvalue()
+            buffer.close()
+            
+            return pdf_bytes
+            
+        except Exception as e:
+            logger.error(f"Error generating mock PDF: {str(e)}")
+            raise
