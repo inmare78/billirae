@@ -3,12 +3,12 @@ from pydantic import BaseModel, EmailStr, Field
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
-from app.db.models.invoice import InvoiceInDB
-from app.db.models.user import UserInDB
-from app.db.models.client import ClientInDB
-from app.services.pdf_service import PDFService
-from app.services.email_service import EmailService
-from app.core.security import get_current_user
+from ..db.models.invoice import InvoiceInDB
+from ..db.models.user import UserInDB
+from ..db.models.client import ClientInDB
+from ..services.pdf_service import PDFService
+from ..services.email_service import EmailService
+from ..core.security import get_current_user
 
 router = APIRouter()
 pdf_service = PDFService()
