@@ -70,10 +70,26 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
 
   const startWhisperRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!window.MediaRecorder) {
+        throw new Error('MediaRecorder not supported');
+      }
+      
+      const streamPromise = navigator.mediaDevices.getUserMedia({ audio: true });
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Timeout requesting microphone access')), 10000);
+      });
+      
+      const stream = await Promise.race([streamPromise, timeoutPromise]) as MediaStream;
       
       audioChunksRef.current = [];
       const mediaRecorder = new MediaRecorder(stream);
+      
+      mediaRecorder.onerror = (event) => {
+        console.error('MediaRecorder error:', event);
+        setError('Fehler bei der Aufnahme. Bitte versuchen Sie es erneut.');
+        setListening(false);
+        stream.getTracks().forEach((track: MediaStreamTrack) => track.stop());
+      };
       
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -82,19 +98,60 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
       };
       
       mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        await processAudioRecording(audioBlob);
-        
-        stream.getTracks().forEach(track => track.stop());
+        try {
+          if (audioChunksRef.current.length === 0) {
+            throw new Error('No audio data recorded');
+          }
+          
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          
+          if (audioBlob.size < 1000) {
+            throw new Error('Audio recording too short or no speech detected');
+          }
+          
+          await processAudioRecording(audioBlob);
+        } catch (error) {
+          console.error('Error processing recording:', error);
+          const err = error as Error;
+          if (err.message && err.message.includes('too short')) {
+            setError('Keine Sprache erkannt. Bitte sprechen Sie deutlich und versuchen Sie es erneut.');
+          } else {
+            setError('Fehler bei der Verarbeitung der Aufnahme. Bitte versuchen Sie es erneut.');
+          }
+          setIsProcessing(false);
+        } finally {
+          stream.getTracks().forEach((track: MediaStreamTrack) => track.stop());
+        }
       };
       
-      mediaRecorder.start();
+      mediaRecorder.start(3000); // Collect data in 3-second chunks
       mediaRecorderRef.current = mediaRecorder;
       setListening(true);
       
-    } catch (err) {
-      console.error('Error accessing microphone:', err);
-      setError('Zugriff auf das Mikrofon fehlgeschlagen. Bitte erteilen Sie die Berechtigung und versuchen Sie es erneut.');
+    } catch (error) {
+      console.error('Error accessing microphone:', error);
+      
+      const err = error as Error & { name?: string };
+      
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setError('Mikrofon-Zugriff verweigert. Bitte erteilen Sie die Berechtigung in Ihren Browser-Einstellungen.');
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        setError('Kein Mikrofon gefunden. Bitte stellen Sie sicher, dass ein Mikrofon angeschlossen ist.');
+      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        setError('Mikrofon wird bereits von einer anderen Anwendung verwendet. Bitte schließen Sie andere Anwendungen, die das Mikrofon nutzen könnten.');
+      } else if (err.message && err.message.includes('MediaRecorder not supported')) {
+        setError('Ihr Browser unterstützt die Audioaufnahme nicht. Bitte verwenden Sie Chrome oder Safari.');
+        if (browserSupportsSpeechRecognition) {
+          setRecordingMethod('native');
+          startNativeListening();
+          return;
+        }
+      } else if (err.message && err.message.includes('Timeout')) {
+        setError('Zeitüberschreitung beim Zugriff auf das Mikrofon. Bitte versuchen Sie es erneut.');
+      } else {
+        setError('Zugriff auf das Mikrofon fehlgeschlagen. Bitte erteilen Sie die Berechtigung und versuchen Sie es erneut.');
+      }
+      
       setListening(false);
     }
   };
@@ -120,8 +177,8 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
       if (text.trim()) {
         await processTranscript(text);
       }
-    } catch (err) {
-      console.error('Error processing audio recording:', err);
+    } catch (error) {
+      console.error('Error processing audio recording:', error);
       setError('Fehler bei der Verarbeitung der Audioaufnahme. Bitte versuchen Sie es erneut.');
     } finally {
       setIsProcessing(false);
@@ -203,8 +260,8 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
       if (onInvoiceDataChange) {
         onInvoiceDataChange(data);
       }
-    } catch (err) {
-      console.error('Error processing voice transcript:', err);
+    } catch (error) {
+      console.error('Error processing voice transcript:', error);
       setError('Fehler bei der Verarbeitung der Sprachaufnahme. Bitte versuchen Sie es erneut.');
       setInvoiceData(null);
       if (onInvoiceDataChange) {
