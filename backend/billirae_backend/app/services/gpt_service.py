@@ -1,7 +1,8 @@
 import logging
 import json
-from typing import Dict, Any
-from datetime import datetime
+import tempfile
+from typing import Dict, Any, Tuple
+from datetime import datetime, timedelta
 import openai
 from billirae_backend.app.core.config import settings
 
@@ -74,6 +75,42 @@ class GPTService:
         except Exception as e:
             logger.error(f"Error processing voice input with GPT: {str(e)}")
             raise ValueError(f"Error processing voice input: {str(e)}")
+    
+    async def transcribe_audio(self, audio_file_path: str) -> Tuple[str, Dict[str, Any]]:
+        """
+        Transcribe audio file using OpenAI Whisper API and parse the transcript.
+        
+        Args:
+            audio_file_path: Path to the audio file
+            
+        Returns:
+            Tuple of (transcript, parsed_invoice_data)
+        """
+        try:
+            logger.info("Transcribing audio with OpenAI Whisper")
+            
+            # Set OpenAI API key
+            openai.api_key = self.api_key
+            
+            with open(audio_file_path, "rb") as audio_file:
+                response = await openai.Audio.atranscribe(
+                    model="whisper-1",
+                    file=audio_file,
+                    language="de",
+                    response_format="text"
+                )
+            
+            transcript = response.text
+            
+            logger.info(f"Transcription result: {transcript}")
+            
+            invoice_data = await self.parse_invoice_text(transcript)
+            
+            return transcript, invoice_data
+            
+        except Exception as e:
+            logger.error(f"Error transcribing audio with Whisper: {str(e)}")
+            raise ValueError(f"Error transcribing audio: {str(e)}")
     
     def _mock_parse_invoice(self, text: str) -> Dict[str, Any]:
         """

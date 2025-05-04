@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '../ui/button';
 import useVoiceRecognition from '../../hooks/voice/useVoiceRecognition';
 import { voiceService } from '../../services/api';
@@ -23,18 +23,25 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
   onTranscriptChange, 
   onInvoiceDataChange 
 }) => {
+  // For browser-native speech recognition
   const { 
     transcript, 
-    listening, 
-    startListening, 
-    stopListening, 
+    listening: nativeListening, 
+    startListening: startNativeListening, 
+    stopListening: stopNativeListening, 
     resetTranscript, 
     browserSupportsSpeechRecognition 
   } = useVoiceRecognition();
   
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [invoiceData, setInvoiceData] = useState<InvoiceData | null>(null);
+  const [listening, setListening] = useState(false);
+  const [recordingMethod, setRecordingMethod] = useState<'native' | 'whisper'>('native');
+  const [localTranscript, setLocalTranscript] = useState('');
   
   const isTestMode = typeof localStorage !== 'undefined' && localStorage.getItem('test_mode') === 'true';
   console.log('VoiceInput: Test mode is', isTestMode ? 'enabled' : 'disabled');
@@ -42,8 +49,18 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
   const testTranscript = "Drei Massagen à 80 Euro für Max Mustermann, heute, inklusive Mehrwertsteuer.";
 
   useEffect(() => {
-    onTranscriptChange(transcript);
-  }, [transcript, onTranscriptChange]);
+    // When using native speech recognition, update the local transcript
+    if (recordingMethod === 'native') {
+      setLocalTranscript(transcript);
+      onTranscriptChange(transcript);
+    }
+  }, [transcript, onTranscriptChange, recordingMethod]);
+
+  useEffect(() => {
+    if (recordingMethod === 'native') {
+      setListening(nativeListening);
+    }
+  }, [nativeListening, recordingMethod]);
 
   useEffect(() => {
     if (onInvoiceDataChange && invoiceData) {
@@ -51,11 +68,75 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
     }
   }, [invoiceData, onInvoiceDataChange]);
 
+  const startWhisperRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      audioChunksRef.current = [];
+      const mediaRecorder = new MediaRecorder(stream);
+      
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+      
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        await processAudioRecording(audioBlob);
+        
+        stream.getTracks().forEach(track => track.stop());
+      };
+      
+      mediaRecorder.start();
+      mediaRecorderRef.current = mediaRecorder;
+      setListening(true);
+      
+    } catch (err) {
+      console.error('Error accessing microphone:', err);
+      setError('Zugriff auf das Mikrofon fehlgeschlagen. Bitte erteilen Sie die Berechtigung und versuchen Sie es erneut.');
+      setListening(false);
+    }
+  };
+  
+  const stopWhisperRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+      setListening(false);
+    }
+  };
+  
+  const processAudioRecording = async (audioBlob: Blob) => {
+    setIsProcessing(true);
+    setError(null);
+    
+    try {
+      const response = await voiceService.transcribeAudio(audioBlob);
+      const text = response.transcript || '';
+      
+      setLocalTranscript(text);
+      onTranscriptChange(text);
+      
+      if (text.trim()) {
+        await processTranscript(text);
+      }
+    } catch (err) {
+      console.error('Error processing audio recording:', err);
+      setError('Fehler bei der Verarbeitung der Audioaufnahme. Bitte versuchen Sie es erneut.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const toggleListening = () => {
     if (listening) {
-      stopListening();
-      if (transcript.trim()) {
-        processTranscript(transcript);
+      if (recordingMethod === 'native') {
+        stopNativeListening();
+        if (transcript.trim()) {
+          processTranscript(transcript);
+        }
+      } else {
+        stopWhisperRecording();
       }
     } else {
       setError(null);
@@ -65,18 +146,25 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
         console.log("TEST MODE ACTIVATED in toggleListening");
         // In test mode, skip the speech recognition and directly process the test transcript
         setIsProcessing(true);
+        setLocalTranscript(testTranscript);
         onTranscriptChange(testTranscript);
         
         console.log("TEST MODE: Processing transcript immediately");
         processTranscript(testTranscript);
       } else {
-        startListening();
+        // Try to use Whisper API first, fallback to native speech recognition
+        if (recordingMethod === 'whisper') {
+          startWhisperRecording();
+        } else {
+          startNativeListening();
+        }
       }
     }
   };
 
   const handleReset = () => {
     resetTranscript();
+    setLocalTranscript('');
     onTranscriptChange('');
     setInvoiceData(null);
     if (onInvoiceDataChange) {
@@ -127,14 +215,18 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
     }
   };
 
-  // In test mode, always return that browser supports speech recognition
-  if (!browserSupportsSpeechRecognition && !isTestMode) {
+  const canUseSpeechRecognition = browserSupportsSpeechRecognition || isTestMode;
+  const canUseMediaRecorder = typeof MediaRecorder !== 'undefined';
+  
+  if (!canUseSpeechRecognition && !canUseMediaRecorder && !isTestMode) {
     return (
       <div className="p-4 bg-destructive/10 text-destructive rounded-md">
         Ihr Browser unterstützt die Spracherkennung nicht. Bitte verwenden Sie Chrome oder Safari.
       </div>
     );
   }
+
+  const currentTranscript = recordingMethod === 'native' ? transcript : localTranscript;
 
   return (
     <div className="space-y-4">
@@ -216,7 +308,7 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
           >
             {listening ? "Stoppen" : "Aufnehmen"}
           </Button>
-          {(transcript || invoiceData) && (
+          {(currentTranscript || invoiceData) && (
             <Button
               onClick={handleReset}
               variant="outline"
@@ -226,9 +318,9 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
               Zurücksetzen
             </Button>
           )}
-          {transcript && !listening && !isProcessing && !invoiceData && (
+          {currentTranscript && !listening && !isProcessing && !invoiceData && (
             <Button
-              onClick={() => processTranscript(transcript)}
+              onClick={() => processTranscript(currentTranscript)}
               variant="secondary"
               size="sm"
             >
@@ -236,11 +328,49 @@ const VoiceInput: React.FC<VoiceInputProps> = ({
             </Button>
           )}
         </div>
+        
+        {/* Recording method toggle */}
+        {!isTestMode && canUseSpeechRecognition && canUseMediaRecorder && (
+          <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
+            <span>Erkennungsmethode:</span>
+            <div className="flex rounded-md overflow-hidden border">
+              <button
+                onClick={() => setRecordingMethod('native')}
+                className={`px-2 py-1 text-xs ${
+                  recordingMethod === 'native' 
+                    ? 'bg-primary text-primary-foreground' 
+                    : 'bg-muted hover:bg-muted/80'
+                }`}
+                disabled={listening || isProcessing}
+              >
+                Browser API
+              </button>
+              <button
+                onClick={() => setRecordingMethod('whisper')}
+                className={`px-2 py-1 text-xs ${
+                  recordingMethod === 'whisper' 
+                    ? 'bg-primary text-primary-foreground' 
+                    : 'bg-muted hover:bg-muted/80'
+                }`}
+                disabled={listening || isProcessing}
+              >
+                OpenAI Whisper
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {error && (
         <div className="p-3 bg-destructive/10 text-destructive rounded-md text-sm">
           {error}
+        </div>
+      )}
+
+      {currentTranscript && !invoiceData && !isProcessing && (
+        <div className="p-3 bg-blue-50 text-blue-800 rounded-md text-sm">
+          <p className="font-semibold">Erkannter Text:</p>
+          <p className="mt-1">{currentTranscript}</p>
         </div>
       )}
 

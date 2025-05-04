@@ -41,6 +41,29 @@ export const voiceService = {
       throw error;
     }
   },
+  
+  /**
+   * Send audio data to backend for transcription using OpenAI Whisper
+   * @param audioBlob Audio blob from microphone recording
+   * @returns Transcribed text and parsed invoice data
+   */
+  transcribeAudio: async (audioBlob: Blob) => {
+    try {
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'recording.webm');
+      
+      const response = await api.post('/voice/parse', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
+      return response.data;
+    } catch (error) {
+      console.error('Error transcribing audio:', error);
+      throw error;
+    }
+  },
 };
 
 export const userService = {
