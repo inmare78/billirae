@@ -6,6 +6,7 @@ import { Label } from '../components/ui/label';
 import VoiceInput from '../components/voice/VoiceInput';
 import InvoicePreview from '../components/invoice/InvoicePreview';
 import { invoiceService, supabaseService } from '../services/api';
+import { checkSupabaseConnection } from '../services/supabaseClient';
 import jsPDF from 'jspdf';
 
 interface InvoiceData {
@@ -20,7 +21,6 @@ interface InvoiceData {
 }
 
 function CreateInvoicePage() {
-  const [transcript, setTranscript] = useState('');
   const [parsedData, setParsedData] = useState<InvoiceData | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState('');
@@ -35,11 +35,12 @@ function CreateInvoicePage() {
   const [emailSent, setEmailSent] = useState(false);
   const [emailError, setEmailError] = useState('');
   const [supabaseSuccess, setSupabaseSuccess] = useState(false);
+  const [supabaseConnectionStatus, setSupabaseConnectionStatus] = useState<'unknown' | 'connected' | 'disconnected'>('unknown');
   
   const pdfIframeRef = useRef<HTMLIFrameElement>(null);
 
   const handleTranscriptChange = (text: string) => {
-    setTranscript(text);
+    console.log('Transcript received:', text);
   };
 
   const handleInvoiceDataChange = (data: InvoiceData | null) => {
@@ -64,6 +65,18 @@ function CreateInvoicePage() {
     try {
       const isTestMode = localStorage.getItem('test_mode') === 'true';
       
+      if (!isTestMode) {
+        console.log('Checking Supabase connection before creating invoice');
+        const { connected, error: connectionError } = await checkSupabaseConnection();
+        if (!connected) {
+          console.error('Supabase connection test failed:', connectionError);
+          setError(`Verbindungsproblem mit Supabase: ${connectionError instanceof Error ? connectionError.message : 'Netzwerkfehler'}`);
+          setIsProcessing(false);
+          return;
+        }
+        console.log('Supabase connection verified successfully');
+      }
+      
       if (isTestMode) {
         console.log('Test mode detected, skipping actual API call');
         const mockInvoiceId = 'mock-invoice-id-123';
@@ -74,11 +87,13 @@ function CreateInvoicePage() {
         try {
           console.log('Saving invoice data to Supabase in test mode');
           await supabaseService.saveInvoice(parsedData, mockInvoiceId);
+          console.log('Successfully saved to Supabase in test mode');
           setSupabaseSuccess(true);
         } catch (supabaseError) {
           console.error('Error saving to Supabase:', supabaseError);
-          console.log('Test mode: Simulating successful Supabase save despite connection error');
-          setSupabaseSuccess(true);
+          setSupabaseSuccess(false);
+          const errorMessage = supabaseError instanceof Error ? supabaseError.message : 'Netzwerkfehler';
+          setError(`Fehler beim Speichern in Supabase: ${errorMessage}`);
         }
         
         setTimeout(() => {
@@ -91,10 +106,14 @@ function CreateInvoicePage() {
         setInvoiceId(response.id);
         
         try {
-          await supabaseService.saveInvoice(parsedData, response.id);
+          const savedInvoice = await supabaseService.saveInvoice(parsedData, response.id);
+          console.log('Successfully saved invoice to Supabase:', savedInvoice);
           setSupabaseSuccess(true);
         } catch (supabaseError) {
           console.error('Error saving to Supabase:', supabaseError);
+          setSupabaseSuccess(false);
+          const errorMessage = supabaseError instanceof Error ? supabaseError.message : 'Netzwerkfehler';
+          setError(`Fehler beim Speichern in Supabase: ${errorMessage}`);
         }
         
         await handleGeneratePDF(response.id);
@@ -288,6 +307,30 @@ function CreateInvoicePage() {
   useEffect(() => {
     console.log('Rendering component with pdfUrl:', pdfUrl);
   }, [pdfUrl]);
+  
+  useEffect(() => {
+    const testConnection = async () => {
+      console.log('Testing Supabase connection...');
+      try {
+        const isTestMode = localStorage.getItem('test_mode') === 'true';
+        
+        if (isTestMode) {
+          console.log('Test mode detected, setting mock connection status');
+          setSupabaseConnectionStatus('connected');
+          return;
+        }
+        
+        const { connected, error } = await checkSupabaseConnection();
+        console.log('Supabase connection check result:', { connected, error });
+        setSupabaseConnectionStatus(connected ? 'connected' : 'disconnected');
+        console.log('Supabase connection status set to:', connected ? 'Connected' : 'Disconnected');
+      } catch (error) {
+        console.error('Error checking Supabase connection:', error);
+        setSupabaseConnectionStatus('disconnected');
+      }
+    };
+    testConnection();
+  }, []);
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -306,6 +349,21 @@ function CreateInvoicePage() {
               onTranscriptChange={handleTranscriptChange} 
               onInvoiceDataChange={handleInvoiceDataChange}
             />
+            
+            {supabaseConnectionStatus !== 'unknown' && (
+              <div className={`mt-4 p-2 rounded-md text-sm flex items-center ${
+                supabaseConnectionStatus === 'connected' 
+                  ? 'bg-green-100 text-green-800' 
+                  : 'bg-yellow-100 text-yellow-800'
+              }`}>
+                <div className={`w-3 h-3 rounded-full mr-2 ${
+                  supabaseConnectionStatus === 'connected' 
+                    ? 'bg-green-500' 
+                    : 'bg-yellow-500'
+                }`}></div>
+                Supabase Status: {supabaseConnectionStatus === 'connected' ? 'Verbunden' : 'Nicht verbunden'}
+              </div>
+            )}
             
             {error && (
               <div className="mt-4 p-3 bg-destructive/10 text-destructive rounded-md">

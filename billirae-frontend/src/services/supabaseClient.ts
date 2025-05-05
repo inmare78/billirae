@@ -4,7 +4,7 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
-  console.error('Supabase environment variables are not set. Please check your .env file.');
+  console.error('Supabase environment variables are missing. Please check your .env file.');
 }
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
@@ -21,3 +21,22 @@ export interface SupabaseInvoice {
   total?: number;
   invoice_number?: string;
 }
+
+export const checkSupabaseConnection = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('invoices')
+      .select('id')
+      .limit(1);
+    
+    if (error) {
+      console.error('Supabase connection test failed:', error);
+      return { connected: false, error };
+    }
+    
+    return { connected: true, data };
+  } catch (error) {
+    console.error('Supabase connection test exception:', error);
+    return { connected: false, error };
+  }
+};
