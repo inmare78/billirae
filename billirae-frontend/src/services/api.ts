@@ -307,4 +307,47 @@ export const invoiceService = {
   }
 };
 
+import { supabase, SupabaseInvoice } from './supabaseClient';
+
+export const supabaseService = {
+  /**
+   * Save invoice data to Supabase
+   * @param invoiceData Invoice data from the frontend
+   * @param invoiceId Optional invoice ID (for PDF generation)
+   * @returns Saved invoice data
+   */
+  saveInvoice: async (invoiceData: any, invoiceId?: string): Promise<SupabaseInvoice> => {
+    try {
+      const totalBeforeTax = invoiceData.quantity * invoiceData.unit_price;
+      const total = totalBeforeTax + (totalBeforeTax * invoiceData.tax_rate);
+      
+      const invoiceNumber = invoiceId ? `INV-${invoiceId}` : undefined;
+      
+      const supabaseInvoice: SupabaseInvoice = {
+        customer: invoiceData.client,
+        service: invoiceData.service,
+        quantity: invoiceData.quantity,
+        unit_price: invoiceData.unit_price,
+        vat: invoiceData.tax_rate,
+        date: invoiceData.invoice_date,
+        total: parseFloat(total.toFixed(2)),
+        invoice_number: invoiceNumber
+      };
+      
+      const { data, error } = await supabase
+        .from('invoices')
+        .insert(supabaseInvoice)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      return data;
+    } catch (error) {
+      console.error('Error saving invoice to Supabase:', error);
+      throw error;
+    }
+  }
+};
+
 export default api;

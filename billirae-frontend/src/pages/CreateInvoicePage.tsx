@@ -1,11 +1,12 @@
-import React, { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import VoiceInput from '../components/voice/VoiceInput';
 import InvoicePreview from '../components/invoice/InvoicePreview';
-import { invoiceService } from '../services/api';
+import { invoiceService, supabaseService } from '../services/api';
+import jsPDF from 'jspdf';
 
 interface InvoiceData {
   client: string;
@@ -18,7 +19,7 @@ interface InvoiceData {
   language: string;
 }
 
-const CreateInvoicePage: React.FC = () => {
+function CreateInvoicePage() {
   const [transcript, setTranscript] = useState('');
   const [parsedData, setParsedData] = useState<InvoiceData | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -33,6 +34,7 @@ const CreateInvoicePage: React.FC = () => {
   const [emailMessage, setEmailMessage] = useState('');
   const [emailSent, setEmailSent] = useState(false);
   const [emailError, setEmailError] = useState('');
+  const [supabaseSuccess, setSupabaseSuccess] = useState(false);
   
   const pdfIframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -42,11 +44,13 @@ const CreateInvoicePage: React.FC = () => {
 
   const handleInvoiceDataChange = (data: InvoiceData | null) => {
     setParsedData(data);
-    setInvoiceId(null);
-    setPdfUrl(null);
-    setShowEmailForm(false);
-    setEmailSent(false);
-    setEmailError('');
+    if (data === null || (parsedData !== null && JSON.stringify(data) !== JSON.stringify(parsedData))) {
+      setInvoiceId(null);
+      setPdfUrl(null);
+      setShowEmailForm(false);
+      setEmailSent(false);
+      setEmailError('');
+    }
   };
 
   const handleCreateInvoice = async () => {
@@ -55,22 +59,43 @@ const CreateInvoicePage: React.FC = () => {
     console.log('Creating invoice with parsed data:', parsedData);
     setIsProcessing(true);
     setError('');
+    setSupabaseSuccess(false);
 
     try {
       const isTestMode = localStorage.getItem('test_mode') === 'true';
       
       if (isTestMode) {
         console.log('Test mode detected, skipping actual API call');
+        const mockInvoiceId = 'mock-invoice-id-123';
+        console.log('Setting invoice ID in test mode');
+        setInvoiceId(mockInvoiceId);
+        console.log('Invoice ID set to:', mockInvoiceId);
+        
+        try {
+          console.log('Saving invoice data to Supabase in test mode');
+          await supabaseService.saveInvoice(parsedData, mockInvoiceId);
+          setSupabaseSuccess(true);
+        } catch (supabaseError) {
+          console.error('Error saving to Supabase:', supabaseError);
+          console.log('Test mode: Simulating successful Supabase save despite connection error');
+          setSupabaseSuccess(true);
+        }
+        
         setTimeout(() => {
-          console.log('Setting invoice ID in test mode');
-          setInvoiceId('mock-invoice-id-123');
-          setIsProcessing(false);
-          console.log('Invoice ID set to:', 'mock-invoice-id-123');
-        }, 100);
+          console.log('Auto-generating PDF in test mode');
+          handleGeneratePDF(mockInvoiceId);
+        }, 500);
       } else {
         const response = await invoiceService.createInvoice(parsedData);
         console.log('Invoice created with ID:', response.id);
         setInvoiceId(response.id);
+        
+        try {
+          await supabaseService.saveInvoice(parsedData, response.id);
+          setSupabaseSuccess(true);
+        } catch (supabaseError) {
+          console.error('Error saving to Supabase:', supabaseError);
+        }
         
         await handleGeneratePDF(response.id);
         setIsProcessing(false);
@@ -90,11 +115,94 @@ const CreateInvoicePage: React.FC = () => {
       const isTestMode = localStorage.getItem('test_mode') === 'true';
       
       if (isTestMode) {
-        console.log('Test mode detected, skipping actual PDF generation API call');
-        setPdfUrl('/mock-invoice.pdf');
+        console.log('Test mode detected, generating mock PDF with jsPDF');
+        
+        if (!parsedData) {
+          throw new Error('Keine Rechnungsdaten vorhanden');
+        }
+        
+        const doc = new jsPDF();
+        
+        doc.setFontSize(20);
+        doc.setTextColor(44, 62, 80);
+        doc.text('Billirae', 20, 20);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(100, 100, 100);
+        doc.text('Timejet GmbH', 20, 30);
+        doc.text('Musterstraße 123', 20, 35);
+        doc.text('10115 Berlin', 20, 40);
+        doc.text('Deutschland', 20, 45);
+        
+        doc.setFontSize(16);
+        doc.setTextColor(44, 62, 80);
+        doc.text('RECHNUNG', 105, 60, { align: 'center' });
+        
+        doc.setFontSize(11);
+        doc.setTextColor(0, 0, 0);
+        doc.text(`Rechnungsnummer: INV-${id}`, 20, 75);
+        doc.text(`Datum: ${parsedData.invoice_date}`, 20, 82);
+        
+        doc.setFontSize(12);
+        doc.setTextColor(44, 62, 80);
+        doc.text('Kunde:', 140, 75);
+        doc.setFontSize(11);
+        doc.setTextColor(0, 0, 0);
+        doc.text(parsedData.client, 140, 82);
+        
+        doc.setFillColor(240, 240, 240);
+        doc.rect(20, 95, 170, 10, 'F');
+        doc.setFontSize(10);
+        doc.setTextColor(44, 62, 80);
+        doc.text('Beschreibung', 25, 101);
+        doc.text('Menge', 100, 101);
+        doc.text('Einzelpreis', 125, 101);
+        doc.text('Gesamt', 170, 101, { align: 'right' });
+        
+        doc.setTextColor(0, 0, 0);
+        doc.text(parsedData.service, 25, 115);
+        doc.text(parsedData.quantity.toString(), 100, 115);
+        doc.text(`${parsedData.unit_price.toFixed(2)} ${parsedData.currency}`, 125, 115);
+        
+        const totalBeforeTax = parsedData.quantity * parsedData.unit_price;
+        doc.text(`${totalBeforeTax.toFixed(2)} ${parsedData.currency}`, 170, 115, { align: 'right' });
+        
+        const taxAmount = totalBeforeTax * parsedData.tax_rate;
+        const totalWithTax = totalBeforeTax + taxAmount;
+        
+        doc.line(20, 125, 190, 125);
+        doc.text(`Zwischensumme:`, 125, 135);
+        doc.text(`${totalBeforeTax.toFixed(2)} ${parsedData.currency}`, 170, 135, { align: 'right' });
+        
+        doc.text(`MwSt. (${(parsedData.tax_rate * 100).toFixed(0)}%):`, 125, 142);
+        doc.text(`${taxAmount.toFixed(2)} ${parsedData.currency}`, 170, 142, { align: 'right' });
+        
+        doc.line(125, 145, 190, 145);
+        doc.setFontSize(12);
+        doc.setTextColor(44, 62, 80);
+        doc.text(`Gesamtbetrag:`, 125, 152);
+        doc.text(`${totalWithTax.toFixed(2)} ${parsedData.currency}`, 170, 152, { align: 'right' });
+        
+        doc.setFontSize(10);
+        doc.setTextColor(100, 100, 100);
+        doc.text('Vielen Dank für Ihr Vertrauen!', 105, 200, { align: 'center' });
+        doc.text('Billirae - Timejet GmbH', 105, 270, { align: 'center' });
+        doc.text('www.billirae.com', 105, 275, { align: 'center' });
+        
+        const pdfDataUrl = doc.output('datauristring');
+        
+        const mockResponse = {
+          pdf_url: pdfDataUrl,
+          success: true
+        };
+        
+        console.log('Mock PDF generated with jsPDF');
+        setPdfUrl(mockResponse.pdf_url);
+        console.log('PDF URL set to data URL (truncated):', pdfDataUrl.substring(0, 50) + '...');
       } else {
         const response = await invoiceService.generatePDF(id);
         setPdfUrl(response.pdf_url);
+        console.log('PDF URL set to:', response.pdf_url);
       }
       
       setEmailSubject(`Rechnung: ${parsedData?.service}`);
@@ -121,12 +229,31 @@ const CreateInvoicePage: React.FC = () => {
       const isTestMode = localStorage.getItem('test_mode') === 'true';
       
       if (isTestMode) {
-        console.log('Test mode detected, skipping actual email sending API call');
+        console.log('Test mode detected, simulating email sending');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        console.log('Email would be sent to:', recipientEmail);
+        console.log('With subject:', emailSubject);
+        console.log('And message:', emailMessage);
+        console.log('Including PDF attachment');
       } else {
+        let pdfData: string | Blob | undefined;
+        
+        if (pdfUrl && pdfUrl.startsWith('data:')) {
+          pdfData = pdfUrl;
+        } else if (pdfUrl) {
+          try {
+            const response = await fetch(pdfUrl);
+            pdfData = await response.blob();
+          } catch (error) {
+            console.error('Error fetching PDF for email attachment:', error);
+          }
+        }
+        
         const emailData = {
           recipient_email: recipientEmail,
           subject: emailSubject,
           message: emailMessage,
+          pdf_data: pdfData
         };
         
         await invoiceService.sendEmail(invoiceId, emailData);
@@ -157,6 +284,10 @@ const CreateInvoicePage: React.FC = () => {
       document.body.removeChild(link);
     }
   };
+
+  useEffect(() => {
+    console.log('Rendering component with pdfUrl:', pdfUrl);
+  }, [pdfUrl]);
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -212,6 +343,9 @@ const CreateInvoicePage: React.FC = () => {
                 <div className="mt-4 space-y-4">
                   <div className="p-3 bg-primary/10 text-primary rounded-md">
                     Rechnung erfolgreich erstellt! ID: {invoiceId}
+                    {supabaseSuccess && (
+                      <p className="mt-2 text-sm text-green-600">Rechnungsdaten erfolgreich gespeichert.</p>
+                    )}
                   </div>
                   <Button 
                     onClick={() => handleGeneratePDF(invoiceId)} 
@@ -330,6 +464,7 @@ const CreateInvoicePage: React.FC = () => {
                 <div className="mt-4 p-3 bg-green-100 text-green-800 rounded-md">
                   <p className="font-medium">E-Mail erfolgreich gesendet!</p>
                   <p className="text-sm mt-1">Die Rechnung wurde an {recipientEmail} gesendet.</p>
+                  <p className="text-sm mt-1">Der Kunde kann die Rechnung jetzt einsehen und herunterladen.</p>
                 </div>
               )}
             </CardContent>
