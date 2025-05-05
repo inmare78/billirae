@@ -193,6 +193,7 @@ export const invoiceService = {
    * Send invoice via email
    * @param invoiceId Invoice ID
    * @param emailData Email data
+   * @param pdfData PDF data as base64 string or blob
    * @returns Success message
    */
   sendEmail: async (invoiceId: string, emailData: {
@@ -200,9 +201,29 @@ export const invoiceService = {
     subject?: string;
     message?: string;
     cc_emails?: string[];
+    pdf_data?: string | Blob;
   }) => {
     try {
-      const response = await api.post(`/invoices/${invoiceId}/send-email`, emailData);
+      let payload = { ...emailData };
+      
+      if (payload.pdf_data instanceof Blob) {
+        const reader = new FileReader();
+        const pdfBase64 = await new Promise<string>((resolve) => {
+          reader.onloadend = () => {
+            const base64data = reader.result as string;
+            resolve(base64data.split(',')[1]); // Remove the data URL prefix
+          };
+          reader.readAsDataURL(payload.pdf_data as Blob);
+        });
+        
+        payload.pdf_data = pdfBase64;
+      }
+      
+      const response = await api.post(`/invoice/email`, {
+        invoice_id: invoiceId,
+        ...payload
+      });
+      
       return response.data;
     } catch (error) {
       console.error('Error sending email:', error);
