@@ -327,11 +327,19 @@ export const supabaseService = {
       
       const invoiceNumber = invoiceId ? `INV-${invoiceId}` : `INV-${Date.now()}`;
       
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id;
+      
+      if (!userId && !isTestMode) {
+        throw new Error('User not authenticated. Please log in to save invoices.');
+      }
+      
       if (isTestMode) {
         console.log('Test mode detected, returning mock Supabase response');
         
         const mockInvoice: SupabaseInvoice = {
           id: 'mock-invoice-id-' + Date.now(),
+          user_id: 'mock-user-id-' + Date.now(),
           client_id: 'mock-client-id-' + Date.now(),
           date: formData.invoice_date,
           inv_number: invoiceNumber,
@@ -357,9 +365,10 @@ export const supabaseService = {
       let clientId: string;
       
       const { data: existingCustomers, error: customerError } = await supabase
-        .from('customers')
+        .from('public.customers')
         .select('id')
         .eq('customer_id', formData.client)
+        .eq('user_id', userId)
         .limit(1);
       
       if (customerError) {
@@ -372,13 +381,14 @@ export const supabaseService = {
         console.log('Using existing customer with ID:', clientId);
       } else {
         const newCustomer: SupabaseCustomer = {
+          user_id: userId!,
           customer_id: formData.client,
           first_name: formData.client.split(' ')[0],
           last_name: formData.client.split(' ').slice(1).join(' ')
         };
         
         const { data: customerData, error: createCustomerError } = await supabase
-          .from('customers')
+          .from('public.customers')
           .insert(newCustomer)
           .select()
           .single();
@@ -394,6 +404,7 @@ export const supabaseService = {
       
       // Step 2: Create invoice
       const newInvoice: SupabaseInvoice = {
+        user_id: userId!,
         client_id: clientId,
         date: formData.invoice_date,
         inv_number: invoiceNumber,
@@ -401,7 +412,7 @@ export const supabaseService = {
       };
       
       const { data: createdInvoice, error: invoiceError } = await supabase
-        .from('invoices')
+        .from('public.invoices')
         .insert(newInvoice)
         .select()
         .single();
@@ -423,7 +434,7 @@ export const supabaseService = {
       };
       
       const { data: invoiceItemData, error: invoiceItemError } = await supabase
-        .from('invoice_items')
+        .from('public.invoice_items')
         .insert(newInvoiceItem)
         .select()
         .single();
