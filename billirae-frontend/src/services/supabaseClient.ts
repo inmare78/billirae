@@ -9,17 +9,41 @@ if (!supabaseUrl || !supabaseKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
+export interface SupabaseCustomer {
+  id?: string;
+  user_id?: string;
+  customer_id: string;
+  email?: string;
+  company_name?: string;
+  first_name?: string;
+  last_name?: string;
+  created_at?: string;
+}
+
 export interface SupabaseInvoice {
   id?: string;
+  user_id?: string;
+  client_id: string;
+  date: string;
+  inv_number: string;
+  notes?: string;
+  status?: string;
   created_at?: string;
-  customer: string;
+}
+
+export interface SupabaseInvoiceItem {
+  id?: string;
+  invoice_id: string;
+  position_order?: number;
   service: string;
+  description?: string;
   quantity: number;
   unit_price: number;
+  discount?: number;
   vat: number;
-  date: string;
+  tax_note?: string;
   total?: number;
-  invoice_number?: string;
+  created_at?: string;
 }
 
 export const checkSupabaseConnection = async () => {
