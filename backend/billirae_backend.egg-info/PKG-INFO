@@ -1,0 +1,17 @@
+Metadata-Version: 2.4
+Name: billirae_backend
+Version: 0.1.0
+Requires-Dist: fastapi
+Requires-Dist: uvicorn
+Requires-Dist: pydantic
+Requires-Dist: pymongo
+Requires-Dist: motor
+Requires-Dist: python-jose
+Requires-Dist: passlib
+Requires-Dist: python-multipart
+Requires-Dist: reportlab
+Requires-Dist: qrcode
+Requires-Dist: pillow
+Requires-Dist: requests
+Requires-Dist: python-dotenv
+Dynamic: requires-dist
