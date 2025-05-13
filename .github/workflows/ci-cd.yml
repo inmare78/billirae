@@ -1,0 +1,110 @@
+# .github/workflows/ci-cd.yml
+name: CI / CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '*.md'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  ci:
+    name: 🧪 Continuous Integration
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18.x]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint 📐
+        run: npm run lint
+        # erwartet: "lint" script in package.json
+
+      - name: Type-check (if TS) 🔍
+        run: npm run typecheck
+        # optional: nur, wenn Ihr TS verwendet
+
+      - name: Run unit tests 🧩
+        run: npm test
+        env:
+          NODE_ENV: test
+
+      - name: Build production bundle 📦
+        run: npm run build
+        env:
+          NODE_ENV: production
+
+      - name: Run Supabase migrations ⚙
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          npm install -g supabase
+          supabase login --apikey ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          supabase db push
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      - name: Upload coverage to Coveralls (optional) 📊
+        if: always()
+        uses: coverallsapp/github-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  cd:
+    name: 🚀 Continuous Deployment
+    needs: ci
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18.x
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build production bundle 📦
+        run: npm run build
+        env:
+          NODE_ENV: production
+
+      - name: Deploy to Vercel 🌐
+        uses: amondnet/vercel-action@v20
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-args: '--prod'
+          working-directory: .
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Notify Slack on success (optional) 🔔
+        if: success()
+        uses: 8398a7/action-slack@v3
+        with:
+          payload: |
+            {
+              "text": ":white_check_mark: Deployment to production succeeded for ${{ github.repository }} (<${{ steps.deployment.outputs.preview_url }}>)"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
