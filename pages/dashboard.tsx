@@ -1,3 +1,5 @@
+// Trigger CI/CD
+Trigger CI/CD via dashboard.tsx
 export default function Dashboard() {
   return (
     <main style={{ padding: '2rem' }}>
