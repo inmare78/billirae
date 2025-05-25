@@ -54,14 +54,13 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
 
       - name: Run Supabase migrations ⚙
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          npm install -g supabase
-          supabase login --apikey ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          supabase db push
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      run: |
+         npx supabase login --apikey ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+         npx supabase db push
+      env:
+         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+         SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
       - name: Upload coverage to Coveralls (optional) 📊
         if: always()
