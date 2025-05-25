@@ -16,3 +16,4 @@ Billirae
 Automatisch via GitHub CI/CD und Vercel
 
 <!-- Trigger CI/CD -->
+Trigger CI/CD test
