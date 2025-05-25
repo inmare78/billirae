@@ -62,6 +62,7 @@ jobs:
 
       - name: Upload coverage to Coveralls (optional) 📊
         if: always()
+        continue-on-error: true
         uses: coverallsapp/github-action@v2
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
