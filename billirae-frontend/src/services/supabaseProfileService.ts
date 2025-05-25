@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient';
 
 export interface ProfileData {
+  user_id?: string;
   company_name?: string;
   first_name?: string;
   last_name?: string;
@@ -76,6 +77,7 @@ export const supabaseProfileService = {
       }
       
       const profileData: ProfileData = {
+        user_id: user.id,
         company_name: userData?.company_name || '',
         first_name: userData?.first_name || '',
         last_name: userData?.last_name || '',
