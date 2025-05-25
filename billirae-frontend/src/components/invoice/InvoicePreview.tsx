@@ -8,17 +8,7 @@ import { Label } from '../../components/ui/label';
 import { Input } from '../../components/ui/input';
 import { Textarea } from '../../components/ui/textarea';
 import invoiceService from '../../services/invoiceService';
-
-interface InvoiceData {
-  client: string;
-  service: string;
-  quantity: number;
-  unit_price: number;
-  tax_rate: number;
-  invoice_date: string;
-  currency: string;
-  language: string;
-}
+import { InvoiceData } from '../../types/invoice';
 
 interface InvoicePreviewProps {
   invoiceId?: string;
@@ -121,17 +111,44 @@ export default function InvoicePreview({ invoiceId, invoiceData, onDataChange, o
     setEditMode(false);
   };
 
+  const updateFirstItem = (prev: InvoiceData | null, field: string, value: string | number): InvoiceData | null => {
+    if (!prev) return null;
+    
+    const firstItem = prev.items[0] || {
+      service: '',
+      quantity: 0,
+      unit_price: 0,
+      vat: 0
+    };
+    
+    const updatedItem = { ...firstItem, [field]: typeof value === 'string' ? value : parseFloat(value.toString()) };
+    
+    return {
+      ...prev,
+      items: [updatedItem, ...prev.items.slice(1)]
+    };
+  };
+
   const handleEditDataChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setEditedData(prev => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        [name]: name === 'quantity' || name === 'unit_price' || name === 'tax_rate' 
-          ? parseFloat(value) 
-          : value
-      };
-    });
+    
+    if (name === 'client_id') {
+      setEditedData(prev => {
+        if (!prev) return null;
+        return { ...prev, client_id: value };
+      });
+    } else if (name === 'date') {
+      setEditedData(prev => {
+        if (!prev) return null;
+        return { ...prev, date: value };
+      });
+    } else if (['service', 'quantity', 'unit_price', 'vat'].includes(name)) {
+      setEditedData(prev => updateFirstItem(
+        prev, 
+        name, 
+        ['quantity', 'unit_price', 'vat'].includes(name) ? parseFloat(value) : value
+      ));
+    }
   };
 
   return (
@@ -153,78 +170,76 @@ export default function InvoicePreview({ invoiceId, invoiceData, onDataChange, o
         <Card>
           <CardContent className="p-6 space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="client">Kunde</Label>
+              <Label htmlFor="client_id">Kunde</Label>
               <Input
-                id="client"
-                name="client"
-                value={editedData.client}
+                id="client_id"
+                name="client_id"
+                value={editedData.client_id}
                 onChange={handleEditDataChange}
               />
             </div>
             
-            <div className="space-y-2">
-              <Label htmlFor="service">Leistung</Label>
-              <Input
-                id="service"
-                name="service"
-                value={editedData.service}
-                onChange={handleEditDataChange}
-              />
-            </div>
-            
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="quantity">Menge</Label>
-                <Input
-                  id="quantity"
-                  name="quantity"
-                  type="number"
-                  value={editedData.quantity}
-                  onChange={handleEditDataChange}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="unit_price">Einzelpreis</Label>
-                <Input
-                  id="unit_price"
-                  name="unit_price"
-                  type="number"
-                  step="0.01"
-                  value={editedData.unit_price}
-                  onChange={handleEditDataChange}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="tax_rate">MwSt. (%)</Label>
-                <Input
-                  id="tax_rate"
-                  name="tax_rate"
-                  type="number"
-                  step="0.01"
-                  value={editedData.tax_rate * 100}
-                  onChange={(e) => {
-                    const value = parseFloat(e.target.value) / 100;
-                    setEditedData(prev => {
-                      if (!prev) return null;
-                      return {
-                        ...prev,
-                        tax_rate: value
-                      };
-                    });
-                  }}
-                />
-              </div>
-            </div>
+            {editedData.items[0] && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="service">Leistung</Label>
+                  <Input
+                    id="service"
+                    name="service"
+                    value={editedData.items[0].service}
+                    onChange={handleEditDataChange}
+                  />
+                </div>
+                
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="quantity">Menge</Label>
+                    <Input
+                      id="quantity"
+                      name="quantity"
+                      type="number"
+                      value={editedData.items[0].quantity}
+                      onChange={handleEditDataChange}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="unit_price">Einzelpreis</Label>
+                    <Input
+                      id="unit_price"
+                      name="unit_price"
+                      type="number"
+                      step="0.01"
+                      value={editedData.items[0].unit_price}
+                      onChange={handleEditDataChange}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="vat">MwSt. (%)</Label>
+                    <Input
+                      id="vat"
+                      name="vat"
+                      type="number"
+                      step="0.01"
+                      value={editedData.items[0].vat * 100}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value) / 100;
+                        setEditedData(prev => updateFirstItem(prev, 'vat', value));
+                      }}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
             
             <div className="space-y-2">
-              <Label htmlFor="invoice_date">Rechnungsdatum</Label>
+              <Label htmlFor="date">Rechnungsdatum</Label>
               <Input
-                id="invoice_date"
-                name="invoice_date"
+                id="date"
+                name="date"
                 type="date"
-                value={editedData.invoice_date}
+                value={editedData.date}
                 onChange={handleEditDataChange}
               />
             </div>
@@ -252,44 +267,44 @@ export default function InvoicePreview({ invoiceId, invoiceData, onDataChange, o
                   className="w-full h-[600px] border-0"
                   title="Rechnungs-PDF"
                 />
-              ) : invoiceData && (
+              ) : invoiceData && invoiceData.items[0] && (
                 <div className="p-6 space-y-4">
                   <h3 className="text-lg font-medium">Rechnungsvorschau</h3>
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Kunde</p>
-                      <p>{invoiceData.client}</p>
+                      <p>Kundennr.: {invoiceData.client_id}</p>
                     </div>
                     
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Leistung</p>
-                      <p>{invoiceData.service}</p>
+                      <p>{invoiceData.items[0].service}</p>
                     </div>
                     
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Menge</p>
-                      <p>{invoiceData.quantity}</p>
+                      <p>{invoiceData.items[0].quantity}</p>
                     </div>
                     
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Einzelpreis</p>
-                      <p>{invoiceData.unit_price.toFixed(2)} {invoiceData.currency}</p>
+                      <p>{invoiceData.items[0].unit_price.toFixed(2)} {invoiceData.currency || 'EUR'}</p>
                     </div>
                     
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">MwSt.</p>
-                      <p>{(invoiceData.tax_rate * 100).toFixed(0)}%</p>
+                      <p>{(invoiceData.items[0].vat * 100).toFixed(0)}%</p>
                     </div>
                     
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Gesamtpreis</p>
-                      <p>{(invoiceData.quantity * invoiceData.unit_price).toFixed(2)} {invoiceData.currency}</p>
+                      <p>{(invoiceData.items[0].quantity * invoiceData.items[0].unit_price).toFixed(2)} {invoiceData.currency || 'EUR'}</p>
                     </div>
                     
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Rechnungsdatum</p>
-                      <p>{new Date(invoiceData.invoice_date).toLocaleDateString('de-DE')}</p>
+                      <p>{new Date(invoiceData.date).toLocaleDateString('de-DE')}</p>
                     </div>
                   </div>
                 </div>

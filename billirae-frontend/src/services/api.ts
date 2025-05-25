@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { InvoiceData } from '../types/invoice';
 
 declare global {
   interface ImportMeta {
@@ -258,7 +259,7 @@ export const invoiceService = {
    * @param invoiceData Invoice data
    * @returns Created invoice
    */
-  createInvoice: async (invoiceData: Record<string, unknown>) => {
+  createInvoice: async (invoiceData: InvoiceData) => {
     try {
       const response = await api.post('/invoices', invoiceData);
       return response.data;
@@ -334,18 +335,26 @@ import { supabase, SupabaseInvoice, SupabaseInvoiceItem, SupabaseCustomer } from
 export const supabaseService = {
   /**
    * Save invoice data to Supabase
-   * @param formData Invoice data from the frontend
+   * @param invoiceData Invoice data from the frontend
    * @param invoiceId Optional invoice ID (for PDF generation)
    * @returns Saved invoice data and items
    */
-  saveInvoice: async (formData: InvoiceFormData, invoiceId?: string): Promise<{invoice: SupabaseInvoice, invoiceItem: SupabaseInvoiceItem}> => {
+  saveInvoice: async (invoiceData: InvoiceData, invoiceId?: string): Promise<{invoice: SupabaseInvoice, invoiceItem: SupabaseInvoiceItem}> => {
     try {
-      console.log('Starting to save invoice to Supabase:', formData);
+      console.log('Starting to save invoice to Supabase:', invoiceData);
       
       const isTestMode = localStorage.getItem('test_mode') === 'true';
       
-      const totalBeforeTax = formData.quantity * formData.unit_price;
-      const total = totalBeforeTax + (totalBeforeTax * formData.tax_rate);
+      const firstItem = invoiceData.items[0];
+      if (!firstItem) {
+        throw new Error('Invoice must have at least one item');
+      }
+      
+      const totalBeforeTax = invoiceData.items.reduce((sum, item) => 
+        sum + (item.quantity * item.unit_price), 0);
+      const taxAmount = invoiceData.items.reduce((sum, item) => 
+        sum + (item.quantity * item.unit_price * item.vat), 0);
+      const total = totalBeforeTax + taxAmount;
       
       const invoiceNumber = invoiceId ? `INV-${invoiceId}` : `INV-${Date.now()}`;
       
@@ -362,8 +371,8 @@ export const supabaseService = {
         const mockInvoice: SupabaseInvoice = {
           id: 'mock-invoice-id-' + Date.now(),
           user_id: 'mock-user-id-' + Date.now(),
-          client_id: 'mock-client-id-' + Date.now(),
-          date: formData.invoice_date,
+          client_id: invoiceData.client_id,
+          date: invoiceData.date,
           inv_number: invoiceNumber,
           status: 'draft',
           created_at: new Date().toISOString()
@@ -372,10 +381,10 @@ export const supabaseService = {
         const mockInvoiceItem: SupabaseInvoiceItem = {
           id: 'mock-item-id-' + Date.now(),
           invoice_id: mockInvoice.id || '', // Ensure it's never undefined
-          service: formData.service,
-          quantity: formData.quantity,
-          unit_price: formData.unit_price,
-          vat: formData.tax_rate,
+          service: firstItem.service,
+          quantity: firstItem.quantity,
+          unit_price: firstItem.unit_price,
+          vat: firstItem.vat,
           total: parseFloat(total.toFixed(2)),
           created_at: new Date().toISOString()
         };
@@ -384,51 +393,14 @@ export const supabaseService = {
         return { invoice: mockInvoice, invoiceItem: mockInvoiceItem };
       }
       
-      let clientId: string;
-      
-      const { data: existingCustomers, error: customerError } = await supabase
-        .from('public.customers')
-        .select('id')
-        .eq('customer_id', formData.client)
-        .eq('user_id', userId)
-        .limit(1);
-      
-      if (customerError) {
-        console.error('Error checking for existing customer:', customerError);
-        throw customerError;
-      }
-      
-      if (existingCustomers && existingCustomers.length > 0) {
-        clientId = existingCustomers[0].id;
-        console.log('Using existing customer with ID:', clientId);
-      } else {
-        const newCustomer: SupabaseCustomer = {
-          user_id: userId!,
-          customer_id: formData.client,
-          first_name: formData.client.split(' ')[0],
-          last_name: formData.client.split(' ').slice(1).join(' ')
-        };
-        
-        const { data: customerData, error: createCustomerError } = await supabase
-          .from('public.customers')
-          .insert(newCustomer)
-          .select()
-          .single();
-        
-        if (createCustomerError) {
-          console.error('Error creating customer:', createCustomerError);
-          throw createCustomerError;
-        }
-        
-        clientId = customerData.id;
-        console.log('Created new customer with ID:', clientId);
-      }
+      // Use the client_id directly from the invoice data
+      const clientId = invoiceData.client_id;
       
       // Step 2: Create invoice
       const newInvoice: SupabaseInvoice = {
         user_id: userId!,
         client_id: clientId,
-        date: formData.invoice_date,
+        date: invoiceData.date,
         inv_number: invoiceNumber,
         status: 'draft'
       };
@@ -446,30 +418,35 @@ export const supabaseService = {
       
       console.log('Created invoice with ID:', createdInvoice.id);
       
-      const newInvoiceItem: SupabaseInvoiceItem = {
-        invoice_id: createdInvoice.id || '', // Ensure it's never undefined
-        service: formData.service,
-        quantity: formData.quantity,
-        unit_price: formData.unit_price,
-        vat: formData.tax_rate,
-        total: parseFloat(total.toFixed(2))
-      };
+      const invoiceItems = [];
       
-      const { data: invoiceItemData, error: invoiceItemError } = await supabase
-        .from('public.invoice_items')
-        .insert(newInvoiceItem)
-        .select()
-        .single();
-      
-      if (invoiceItemError) {
-        console.error('Error creating invoice item:', invoiceItemError);
-        throw invoiceItemError;
+      for (const item of invoiceData.items) {
+        const newInvoiceItem: SupabaseInvoiceItem = {
+          invoice_id: createdInvoice.id || '', // Ensure it's never undefined
+          service: item.service,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          vat: item.vat,
+          total: parseFloat((item.quantity * item.unit_price).toFixed(2))
+        };
+        
+        const { data: invoiceItemData, error: invoiceItemError } = await supabase
+          .from('public.invoice_items')
+          .insert(newInvoiceItem)
+          .select()
+          .single();
+        
+        if (invoiceItemError) {
+          console.error('Error creating invoice item:', invoiceItemError);
+          throw invoiceItemError;
+        }
+        
+        console.log('Created invoice item with ID:', invoiceItemData.id);
+        invoiceItems.push(invoiceItemData);
       }
       
-      console.log('Created invoice item with ID:', invoiceItemData.id);
-      
-      console.log('Successfully saved invoice to Supabase:', { invoice: createdInvoice, invoiceItem: invoiceItemData });
-      return { invoice: createdInvoice, invoiceItem: invoiceItemData };
+      console.log('Successfully saved invoice to Supabase:', { invoice: createdInvoice, invoiceItem: invoiceItems[0] });
+      return { invoice: createdInvoice, invoiceItem: invoiceItems[0] };
     } catch (error) {
       console.error('Error saving invoice to Supabase:', error);
       throw error;

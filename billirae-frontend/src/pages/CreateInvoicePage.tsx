@@ -8,17 +8,7 @@ import InvoicePreview from '../components/invoice/InvoicePreview';
 import { invoiceService, supabaseService } from '../services/api';
 import { checkSupabaseConnection } from '../services/supabaseClient';
 import jsPDF from 'jspdf';
-
-interface InvoiceData {
-  client: string;
-  service: string;
-  quantity: number;
-  unit_price: number;
-  tax_rate: number;
-  invoice_date: string;
-  currency: string;
-  language: string;
-}
+import { InvoiceData } from '../types/invoice';
 
 function CreateInvoicePage() {
   const [parsedData, setParsedData] = useState<InvoiceData | null>(null);
@@ -43,8 +33,44 @@ function CreateInvoicePage() {
     console.log('Transcript received:', text);
   };
 
-  const handleInvoiceDataChange = (data: InvoiceData | null) => {
-    setParsedData(data);
+  interface LegacyInvoiceData {
+    client: string;
+    service: string;
+    quantity: number;
+    unit_price: number;
+    tax_rate: number;
+    invoice_date: string;
+    currency: string;
+    language: string;
+  }
+
+  const handleInvoiceDataChange = (data: LegacyInvoiceData | InvoiceData | null) => {
+    if (data) {
+      if ('items' in data && Array.isArray(data.items)) {
+        setParsedData(data as InvoiceData);
+      } else {
+        const legacyData = data as LegacyInvoiceData;
+        const newData: InvoiceData = {
+          client_id: legacyData.client,
+          date: legacyData.invoice_date,
+          items: [
+            {
+              service: legacyData.service,
+              quantity: legacyData.quantity,
+              unit_price: legacyData.unit_price,
+              vat: legacyData.tax_rate,
+              total: legacyData.quantity * legacyData.unit_price
+            }
+          ],
+          currency: legacyData.currency,
+          language: legacyData.language
+        };
+        setParsedData(newData);
+      }
+    } else {
+      setParsedData(null);
+    }
+    
     if (data === null || (parsedData !== null && JSON.stringify(data) !== JSON.stringify(parsedData))) {
       setInvoiceId(null);
       setPdfUrl(null);
@@ -160,14 +186,14 @@ function CreateInvoicePage() {
         doc.setFontSize(11);
         doc.setTextColor(0, 0, 0);
         doc.text(`Rechnungsnummer: INV-${id}`, 20, 75);
-        doc.text(`Datum: ${parsedData.invoice_date}`, 20, 82);
+        doc.text(`Datum: ${parsedData.date}`, 20, 82);
         
         doc.setFontSize(12);
         doc.setTextColor(44, 62, 80);
         doc.text('Kunde:', 140, 75);
         doc.setFontSize(11);
         doc.setTextColor(0, 0, 0);
-        doc.text(parsedData.client, 140, 82);
+        doc.text(`Kundennr.: ${parsedData.client_id}`, 140, 82);
         
         doc.setFillColor(240, 240, 240);
         doc.rect(20, 95, 170, 10, 'F');
@@ -178,29 +204,39 @@ function CreateInvoicePage() {
         doc.text('Einzelpreis', 125, 101);
         doc.text('Gesamt', 170, 101, { align: 'right' });
         
-        doc.setTextColor(0, 0, 0);
-        doc.text(parsedData.service, 25, 115);
-        doc.text(parsedData.quantity.toString(), 100, 115);
-        doc.text(`${parsedData.unit_price.toFixed(2)} ${parsedData.currency}`, 125, 115);
+        let totalBeforeTax = 0;
+        let taxAmount = 0;
         
-        const totalBeforeTax = parsedData.quantity * parsedData.unit_price;
-        doc.text(`${totalBeforeTax.toFixed(2)} ${parsedData.currency}`, 170, 115, { align: 'right' });
+        parsedData.items.forEach((item, index) => {
+          const yPos = 115 + (index * 10);
+          
+          doc.setTextColor(0, 0, 0);
+          doc.text(item.service, 25, yPos);
+          doc.text(item.quantity.toString(), 100, yPos);
+          doc.text(`${item.unit_price.toFixed(2)} ${parsedData.currency || 'EUR'}`, 125, yPos);
+          
+          const itemTotal = item.quantity * item.unit_price;
+          totalBeforeTax += itemTotal;
+          taxAmount += itemTotal * item.vat;
+          
+          doc.text(`${itemTotal.toFixed(2)} ${parsedData.currency || 'EUR'}`, 170, yPos, { align: 'right' });
+        });
         
-        const taxAmount = totalBeforeTax * parsedData.tax_rate;
         const totalWithTax = totalBeforeTax + taxAmount;
+        const vatRate = parsedData.items[0]?.vat || 0;
         
         doc.line(20, 125, 190, 125);
         doc.text(`Zwischensumme:`, 125, 135);
-        doc.text(`${totalBeforeTax.toFixed(2)} ${parsedData.currency}`, 170, 135, { align: 'right' });
+        doc.text(`${totalBeforeTax.toFixed(2)} ${parsedData.currency || 'EUR'}`, 170, 135, { align: 'right' });
         
-        doc.text(`MwSt. (${(parsedData.tax_rate * 100).toFixed(0)}%):`, 125, 142);
-        doc.text(`${taxAmount.toFixed(2)} ${parsedData.currency}`, 170, 142, { align: 'right' });
+        doc.text(`MwSt. (${(vatRate * 100).toFixed(0)}%):`, 125, 142);
+        doc.text(`${taxAmount.toFixed(2)} ${parsedData.currency || 'EUR'}`, 170, 142, { align: 'right' });
         
         doc.line(125, 145, 190, 145);
         doc.setFontSize(12);
         doc.setTextColor(44, 62, 80);
         doc.text(`Gesamtbetrag:`, 125, 152);
-        doc.text(`${totalWithTax.toFixed(2)} ${parsedData.currency}`, 170, 152, { align: 'right' });
+        doc.text(`${totalWithTax.toFixed(2)} ${parsedData.currency || 'EUR'}`, 170, 152, { align: 'right' });
         
         doc.setFontSize(10);
         doc.setTextColor(100, 100, 100);
@@ -224,8 +260,9 @@ function CreateInvoicePage() {
         console.log('PDF URL set to:', response.pdf_url);
       }
       
-      setEmailSubject(`Rechnung: ${parsedData?.service}`);
-      setEmailMessage(`Sehr geehrte(r) ${parsedData?.client},\n\nanbei erhalten Sie Ihre Rechnung für ${parsedData?.service}.\n\nMit freundlichen Grüßen`);
+      const firstItem = parsedData?.items[0];
+      setEmailSubject(`Rechnung: ${firstItem?.service || ''}`);
+      setEmailMessage(`Sehr geehrte(r) Kunde,\n\nanbei erhalten Sie Ihre Rechnung für ${firstItem?.service || ''}.\n\nMit freundlichen Grüßen`);
       
     } catch (err) {
       console.error('Error generating PDF:', err);
