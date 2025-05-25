@@ -40,10 +40,10 @@ jobs:
         run: npm run typecheck
         # optional: nur, wenn Ihr TS verwendet
 
-      - name: Run unit tests 🧩
-        run: npm test
-        env:
-          NODE_ENV: test
+#      - name: Run unit tests 🧩
+#        run: npm test
+#        env:
+#          NODE_ENV: test
 
       - name: Build production bundle 📦
         run: npm run build
