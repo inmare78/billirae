@@ -28,8 +28,17 @@ test.describe('Invoice Creation Workflow', () => {
       });
     });
     
-    // Navigate to the create invoice page
+    // Navigate to the create invoice page with improved stability for CSR
     await page.goto('http://localhost:5173/create-invoice');
+    
+    // Wait for the page to be fully loaded - use multiple strategies for better reliability
+    await page.waitForLoadState('domcontentloaded');
+    
+    // Wait for the main heading which should always be present
+    await page.waitForSelector('h1:has-text("Rechnung erstellen")', { state: 'visible', timeout: 10000 });
+    
+    // Wait for the example text which is always visible in the VoiceInput component
+    await page.waitForSelector('text=Beispiel:', { state: 'visible', timeout: 10000 });
   });
   
   test('should create an invoice via voice input', async ({ page }) => {
