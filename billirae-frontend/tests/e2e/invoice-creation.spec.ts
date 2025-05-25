@@ -12,12 +12,6 @@ const mockInvoiceData = {
   language: "de"
 };
 
-const mockEmailData = {
-  recipient_email: "kunde@beispiel.de",
-  subject: "Rechnung: Massage",
-  message: "Sehr geehrte(r) Max Mustermann,\n\nanbei erhalten Sie Ihre Rechnung für Massage.\n\nMit freundlichen Grüßen"
-};
-
 test.describe('Invoice Creation Workflow', () => {
   test.beforeEach(async ({ page }) => {
     // Enable test mode

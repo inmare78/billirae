@@ -9,52 +9,6 @@ interface UseVoiceRecognitionReturn {
   browserSupportsSpeechRecognition: boolean;
 }
 
-// Define the SpeechRecognition type for TypeScript
-interface SpeechRecognitionEvent extends Event {
-  resultIndex: number;
-  results: SpeechRecognitionResultList;
-}
-
-interface SpeechRecognitionResultList {
-  [index: number]: SpeechRecognitionResult;
-  length: number;
-}
-
-interface SpeechRecognitionResult {
-  [index: number]: SpeechRecognitionAlternative;
-  isFinal: boolean;
-  length: number;
-}
-
-interface SpeechRecognitionAlternative {
-  transcript: string;
-  confidence: number;
-}
-
-interface SpeechRecognition extends EventTarget {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  maxAlternatives: number;
-  onresult: (event: SpeechRecognitionEvent) => void;
-  onend: () => void;
-  onerror: (event: Event) => void;
-  onstart: () => void;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
-}
-
-// Define a type for the SpeechRecognition constructor
-type SpeechRecognitionConstructor = new () => SpeechRecognition;
-
-// Add TypeScript declarations for the Web Speech API
-declare global {
-  interface Window {
-    SpeechRecognition: SpeechRecognitionConstructor;
-    webkitSpeechRecognition: SpeechRecognitionConstructor;
-  }
-}
 
 const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
   const [transcript, setTranscript] = useState('');
@@ -99,12 +53,12 @@ const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
         setListening(false);
       };
       
-      recognitionInstance.onerror = (event: Event) => {
+      recognitionInstance.onerror = (event: SpeechRecognitionErrorEvent) => {
         console.error('Speech recognition error', event);
         setListening(false);
       };
       
-      setRecognition(recognitionInstance);
+      setRecognition(recognitionInstance as SpeechRecognition);
     }
     
     return () => {
