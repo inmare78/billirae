@@ -88,6 +88,8 @@ jobs:
         run: npm run build
         env:
           NODE_ENV: production
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
 
       - name: Deploy to Vercel 🌐
         uses: amondnet/vercel-action@v20
