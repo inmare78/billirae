@@ -220,7 +220,7 @@ export const supabaseProfileService = {
    * Export user data (GDPR)
    * @returns User data export as JSON
    */
-  exportUserData: async (): Promise<any> => {
+  exportUserData: async (): Promise<Record<string, unknown>> => {
     try {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       
