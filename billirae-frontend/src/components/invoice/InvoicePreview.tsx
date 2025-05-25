@@ -79,8 +79,16 @@ export default function InvoicePreview({ invoiceId, invoiceData, onDataChange, o
       if (onEmailSent) {
         onEmailSent();
       }
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Fehler beim Versenden der E-Mail');
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'response' in err && 
+          err.response && typeof err.response === 'object' && 'data' in err.response &&
+          err.response.data && typeof err.response.data === 'object' && 'detail' in err.response.data &&
+          typeof err.response.data.detail === 'string') {
+        setError(err.response.data.detail);
+      } else {
+        setError('Fehler beim Versenden der E-Mail');
+      }
+    
     } finally {
       setIsLoading(false);
     }
@@ -242,7 +250,7 @@ export default function InvoicePreview({ invoiceId, invoiceData, onDataChange, o
                 <iframe 
                   src={pdfUrl} 
                   className="w-full h-[600px] border-0"
-                  title="Rechnungsvorschau"
+                  title="Rechnungs-PDF"
                 />
               ) : invoiceData && (
                 <div className="p-6 space-y-4">

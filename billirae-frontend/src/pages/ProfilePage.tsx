@@ -74,8 +74,8 @@ const ProfilePage: React.FC = () => {
     if (name.includes('.')) {
       const [parent, child] = name.split('.');
       setProfileData(prev => {
-        const parentObj = prev[parent as keyof ProfileData] as Record<string, any> || {};
-        const result = { ...prev } as Record<string, any>;
+        const parentObj = prev[parent as keyof ProfileData] as Record<string, unknown> || {};
+        const result = { ...prev } as Record<string, unknown>;
         result[parent] = {
           ...parentObj,
           [child]: value

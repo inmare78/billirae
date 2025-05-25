@@ -1,4 +1,4 @@
-import { supabase, SupabaseUser, SupabaseUserSettings } from './supabaseClient';
+import { supabase } from './supabaseClient';
 
 export interface ProfileData {
   company_name?: string;

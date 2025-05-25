@@ -21,7 +21,7 @@ const LoginPage: React.FC = () => {
       console.log('Login attempt with:', { email });
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-    } catch (err) {
+    } catch (_error) {
       setError('Anmeldung fehlgeschlagen. Bitte überprüfen Sie Ihre Anmeldedaten.');
     } finally {
       setLoading(false);

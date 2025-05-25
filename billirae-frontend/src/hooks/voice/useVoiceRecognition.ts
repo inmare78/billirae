@@ -66,7 +66,7 @@ const useVoiceRecognition = (): UseVoiceRecognitionReturn => {
         recognition.stop();
       }
     };
-  }, []);
+  }, [recognition]);
 
   const startListening = useCallback(() => {
     if (recognition && !listening) {

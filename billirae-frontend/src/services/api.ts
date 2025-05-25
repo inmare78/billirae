@@ -86,7 +86,18 @@ export const userService = {
    * @param profileData Updated profile data
    * @returns Updated user profile
    */
-  updateProfile: async (profileData: any) => {
+  updateProfile: async (profileData: {
+    company_name?: string;
+    address?: string;
+    tax_id?: string;
+    email?: string;
+    phone?: string;
+    bank_name?: string;
+    bank_account?: string;
+    bank_iban?: string;
+    bank_bic?: string;
+    logo_url?: string;
+  }) => {
     try {
       const response = await api.put('/users/me', profileData);
       return response.data;
