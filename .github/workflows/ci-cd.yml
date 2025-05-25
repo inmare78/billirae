@@ -2,7 +2,7 @@
 name: CI / CD Pipeline
 
 on:
-  workflow_dispatch:         # 👈 manuelles Auslösen ermöglichen
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -35,16 +35,9 @@ jobs:
 
       - name: Lint 📐
         run: npm run lint
-        # erwartet: "lint" script in package.json
 
       - name: Type-check (if TS) 🔍
         run: npm run typecheck
-        # optional: nur, wenn Ihr TS verwendet
-
-#      - name: Run unit tests 🧩
-#        run: npm test
-#        env:
-#          NODE_ENV: test
 
       - name: Build production bundle 📦
         run: npm run build
@@ -55,20 +48,10 @@ jobs:
 
       - name: Run Supabase migrations ⚙
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          npx supabase login --token ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          npx supabase db push
+        run: npx supabase db push
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
-
-      - name: Upload coverage to Coveralls (optional) 📊
-        if: always()
-        continue-on-error: true
-        uses: coverallsapp/github-action@v2
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
   cd:
     name: 🚀 Continuous Deployment
@@ -95,6 +78,7 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
 
       - name: Deploy to Vercel 🌐
+        id: deployment
         uses: amondnet/vercel-action@v20
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
