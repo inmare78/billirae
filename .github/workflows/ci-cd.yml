@@ -55,12 +55,11 @@ jobs:
 
       - name: Run Supabase migrations ⚙
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          npx supabase login --apikey ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          npx supabase db push
+        run: npx supabase db push
         env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
 
       - name: Upload coverage to Coveralls (optional) 📊
         if: always()
