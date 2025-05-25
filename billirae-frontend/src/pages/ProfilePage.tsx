@@ -9,8 +9,10 @@ import { Alert, AlertDescription } from '../components/ui/alert';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { supabaseProfileService, ProfileData } from '../services/supabaseProfileService';
+import { supabaseProfileService, ProfileData, UpcomingInvoice } from '../services/supabaseProfileService';
 import { supabase } from '../services/supabaseClient';
+import { format } from 'date-fns';
+import { de } from 'date-fns/locale';
 
 const Tabs = TabsPrimitive.Root;
 
@@ -91,6 +93,9 @@ const ProfilePage: React.FC = () => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
+  const [reminderDays, setReminderDays] = useState<7 | 30>(7);
+  const [upcomingInvoices, setUpcomingInvoices] = useState<UpcomingInvoice[]>([]);
+  const [loadingInvoices, setLoadingInvoices] = useState(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -195,6 +200,23 @@ const ProfilePage: React.FC = () => {
       setShowDeleteDialog(false);
     }
   };
+  
+  const fetchUpcomingInvoices = async (days: 7 | 30) => {
+    try {
+      setLoadingInvoices(true);
+      const invoices = await supabaseProfileService.getUpcomingInvoices(days);
+      setUpcomingInvoices(invoices);
+    } catch (err) {
+      console.error('Error fetching upcoming invoices:', err);
+      setError('Fehler beim Laden der fälligen Rechnungen.');
+    } finally {
+      setLoadingInvoices(false);
+    }
+  };
+  
+  useEffect(() => {
+    fetchUpcomingInvoices(reminderDays);
+  }, [reminderDays]);
 
   if (loading) {
     return (
@@ -639,18 +661,90 @@ const ProfilePage: React.FC = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <h3 className="font-semibold text-lg">Offene Rechnungen</h3>
-                <div className="border rounded-md">
-                  <div className="p-4 text-center text-muted-foreground">
-                    Keine offenen Rechnungen vorhanden.
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-lg">Anstehende Zahlungen</h3>
+                  <div className="flex items-center space-x-2">
+                    <Label htmlFor="reminder-days" className="mr-2">Zeitraum:</Label>
+                    <select
+                      id="reminder-days"
+                      className="h-9 rounded-md border border-input bg-background px-3 text-sm ring-offset-background"
+                      value={reminderDays}
+                      onChange={(e) => setReminderDays(Number(e.target.value) as 7 | 30)}
+                    >
+                      <option value={7}>Nächste 7 Tage</option>
+                      <option value={30}>Nächste 30 Tage</option>
+                    </select>
                   </div>
                 </div>
                 
-                <h3 className="font-semibold text-lg mt-6">Überfällige Rechnungen</h3>
-                <div className="border rounded-md">
-                  <div className="p-4 text-center text-muted-foreground">
-                    Keine überfälligen Rechnungen vorhanden.
+                {loadingInvoices ? (
+                  <div className="flex justify-center p-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                   </div>
+                ) : upcomingInvoices.length > 0 ? (
+                  <div className="border rounded-md overflow-hidden">
+                    <table className="w-full">
+                      <thead className="bg-muted">
+                        <tr>
+                          <th className="px-4 py-2 text-left">Rechnungsnr.</th>
+                          <th className="px-4 py-2 text-left">Kunde</th>
+                          <th className="px-4 py-2 text-left">Fällig am</th>
+                          <th className="px-4 py-2 text-right">Betrag</th>
+                          <th className="px-4 py-2 text-center">Aktionen</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {upcomingInvoices.map((invoice) => (
+                          <tr key={invoice.id} className="border-t border-border">
+                            <td className="px-4 py-3">{invoice.inv_number}</td>
+                            <td className="px-4 py-3">{invoice.client_name}</td>
+                            <td className="px-4 py-3">
+                              {format(new Date(invoice.due_date), 'dd.MM.yyyy', { locale: de })}
+                            </td>
+                            <td className="px-4 py-3 text-right">{invoice.amount.toFixed(2)} €</td>
+                            <td className="px-4 py-3 text-center">
+                              <div className="flex justify-center space-x-2">
+                                <Button variant="outline" size="sm">
+                                  Ansehen
+                                </Button>
+                                <Button variant="outline" size="sm">
+                                  Erinnern
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="border rounded-md">
+                    <div className="p-6 text-center text-muted-foreground">
+                      Keine anstehenden Zahlungen in den nächsten {reminderDays} Tagen.
+                    </div>
+                  </div>
+                )}
+                
+                <div className="mt-6">
+                  <h3 className="font-semibold text-lg mb-4">Erinnerungen einrichten</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Automatische Erinnerungen für fällige Rechnungen können hier konfiguriert werden.
+                  </p>
+                  <div className="flex flex-col space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <input type="checkbox" id="remind-3-days" className="h-4 w-4 rounded border-gray-300" />
+                      <Label htmlFor="remind-3-days">3 Tage vor Fälligkeit erinnern</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <input type="checkbox" id="remind-due-date" className="h-4 w-4 rounded border-gray-300" />
+                      <Label htmlFor="remind-due-date">Am Fälligkeitstag erinnern</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <input type="checkbox" id="remind-overdue" className="h-4 w-4 rounded border-gray-300" />
+                      <Label htmlFor="remind-overdue">Bei überfälligen Rechnungen erinnern</Label>
+                    </div>
+                  </div>
+                  <Button className="mt-4" variant="outline">Einstellungen speichern</Button>
                 </div>
               </div>
             </CardContent>

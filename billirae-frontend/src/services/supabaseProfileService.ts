@@ -36,6 +36,15 @@ export interface ProfileData {
   };
 }
 
+export interface UpcomingInvoice {
+  id: string;
+  inv_number: string;
+  client_name: string;
+  amount: number;
+  due_date: string;
+  status: string;
+}
+
 export const supabaseProfileService = {
   /**
    * Get user profile data from Supabase
@@ -296,6 +305,75 @@ export const supabaseProfileService = {
    * Delete user account (GDPR)
    * @returns Success message
    */
+  /**
+   * Get invoices with upcoming due dates
+   * @param days Number of days to look ahead (7 or 30)
+   * @returns List of upcoming invoices
+   */
+  getUpcomingInvoices: async (days: number = 7): Promise<UpcomingInvoice[]> => {
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError) {
+        console.error('Error getting authenticated user:', authError);
+        throw authError;
+      }
+      
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+      
+      const today = new Date();
+      const futureDate = new Date();
+      futureDate.setDate(today.getDate() + days);
+      
+      const todayStr = today.toISOString().split('T')[0];
+      const futureDateStr = futureDate.toISOString().split('T')[0];
+      
+      const { data: invoicesData, error: invoicesError } = await supabase
+        .from('invoices')
+        .select(`
+          id, 
+          inv_number, 
+          due_date, 
+          status,
+          customers(company_name),
+          invoice_items(amount, quantity, unit_price)
+        `)
+        .eq('user_id', user.id)
+        .eq('status', 'open')
+        .gte('due_date', todayStr)
+        .lte('due_date', futureDateStr)
+        .order('due_date', { ascending: true });
+      
+      if (invoicesError) {
+        console.error('Error fetching upcoming invoices:', invoicesError);
+        throw invoicesError;
+      }
+      
+      const upcomingInvoices: UpcomingInvoice[] = invoicesData.map((invoice: any) => {
+        const totalAmount = invoice.invoice_items.reduce(
+          (sum: number, item: any) => sum + (item.amount || (item.quantity * item.unit_price)), 
+          0
+        );
+        
+        return {
+          id: invoice.id,
+          inv_number: invoice.inv_number,
+          client_name: invoice.customers?.company_name || 'Unbekannter Kunde',
+          amount: totalAmount,
+          due_date: invoice.due_date,
+          status: invoice.status
+        };
+      });
+      
+      return upcomingInvoices;
+    } catch (error) {
+      console.error('Error in getUpcomingInvoices:', error);
+      throw error;
+    }
+  },
+  
   deleteAccount: async (): Promise<{ success: boolean, message: string }> => {
     try {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
