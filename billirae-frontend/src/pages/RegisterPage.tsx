@@ -29,7 +29,8 @@ const RegisterPage: React.FC = () => {
       console.log('Registration attempt with:', { name, email });
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-    } catch (_error) {
+    } catch (error) {
+      console.error('Registration error:', error);
       setError('Registrierung fehlgeschlagen. Bitte versuchen Sie es erneut.');
     } finally {
       setLoading(false);

@@ -24,7 +24,8 @@ const VerifyEmailPage: React.FC = () => {
         await new Promise(resolve => setTimeout(resolve, 1500));
         
         setVerified(true);
-      } catch (_error) {
+      } catch (error) {
+        console.error('Email verification error:', error);
         setError('E-Mail-Verifizierung fehlgeschlagen. Bitte versuchen Sie es erneut.');
         setVerified(false);
       } finally {

@@ -51,7 +51,7 @@ export const invoiceService = {
    * @param invoiceData Invoice data from voice parsing
    * @returns Created invoice
    */
-  createInvoice: async (invoiceData: any) => {
+  createInvoice: async (invoiceData: Record<string, unknown>) => {
     try {
       const response = await api.post('/invoices', invoiceData);
       return response.data;
@@ -98,7 +98,7 @@ export const invoiceService = {
    * @param invoiceData Updated invoice data
    * @returns Updated invoice
    */
-  updateInvoice: async (invoiceId: string, invoiceData: any) => {
+  updateInvoice: async (invoiceId: string, invoiceData: Record<string, unknown>) => {
     try {
       const response = await api.put(`/invoices/${invoiceId}`, invoiceData);
       return response.data;
