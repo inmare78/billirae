@@ -7,17 +7,6 @@ declare global {
   }
 }
 
-interface InvoiceFormData {
-  client: string;
-  service: string;
-  quantity: number;
-  unit_price: number;
-  tax_rate: number;
-  invoice_date: string;
-  currency: string;
-  language: string;
-}
-
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
 const api = axios.create({
@@ -330,7 +319,7 @@ export const invoiceService = {
   }
 };
 
-import { supabase, SupabaseInvoice, SupabaseInvoiceItem, SupabaseCustomer } from './supabaseClient';
+import { supabase, SupabaseInvoice, SupabaseInvoiceItem } from './supabaseClient';
 
 export const supabaseService = {
   /**
