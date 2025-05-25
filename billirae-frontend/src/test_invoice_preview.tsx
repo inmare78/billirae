@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import InvoicePreview from './components/invoice/InvoicePreview';
+import { InvoiceData } from './types/invoice';
 
 // Mock the invoiceService
 jest.mock('./services/invoiceService', () => ({
@@ -9,15 +10,20 @@ jest.mock('./services/invoiceService', () => ({
 }));
 
 describe('InvoicePreview Component', () => {
-  const mockInvoiceData = {
-    client: 'Test Client',
-    service: 'Test Service',
-    quantity: 3,
-    unit_price: 80,
-    tax_rate: 0.19,
-    invoice_date: '2025-05-02',
+  const mockInvoiceData: InvoiceData = {
+    client_id: 'test-client-id',
+    date: '2025-05-02',
+    inv_number: 'INV-2025-001',
     currency: 'EUR',
     language: 'de',
+    items: [
+      {
+        service: 'Test Service',
+        quantity: 3,
+        unit_price: 80,
+        vat: 0.19,
+      },
+    ],
   };
 
   const mockInvoiceId = 'test-invoice-id';
@@ -77,3 +83,4 @@ describe('InvoicePreview Component', () => {
     expect(await screen.findByText('Rechnung wurde erfolgreich per E-Mail versendet')).toBeInTheDocument();
   });
 });
+
