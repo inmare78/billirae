@@ -14,3 +14,5 @@ Billirae
 ## Deployment
 
 Automatisch via GitHub CI/CD und Vercel
+
+<!-- Trigger CI/CD -->
