@@ -54,14 +54,17 @@ const RegisterPage: React.FC = () => {
       if (data.user) {
         console.log('User registered successfully:', data.user);
         
+        const nameParts = name.split(' ');
+        const firstName = nameParts[0];
+        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+        
         const { error: profileError } = await supabase
           .from('users')
           .insert({
-            id: data.user.id,
-            first_name: name.split(' ')[0],
-            last_name: name.split(' ').slice(1).join(' '),
-            email: email,
-            created_at: new Date().toISOString(),
+            uuid: data.user.id,
+            email: data.user.email,
+            first_name: firstName,
+            last_name: lastName
           });
           
         if (profileError) {
