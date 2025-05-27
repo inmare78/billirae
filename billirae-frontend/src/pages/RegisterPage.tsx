@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Alert, AlertDescription } from '../components/ui/alert';
+import { supabase } from '../services/supabaseClient';
 
 const RegisterPage: React.FC = () => {
+  const navigate = useNavigate();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -27,8 +29,47 @@ const RegisterPage: React.FC = () => {
     
     try {
       console.log('Registration attempt with:', { name, email });
-      await new Promise(resolve => setTimeout(resolve, 1000));
       
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name: name,
+          },
+        },
+      });
+      
+      if (signUpError) {
+        console.error('Supabase signup error:', signUpError);
+        
+        if (signUpError.message.includes('email')) {
+          setError('Diese E-Mail-Adresse wird bereits verwendet.');
+        } else {
+          setError(`Registrierung fehlgeschlagen: ${signUpError.message}`);
+        }
+        return;
+      }
+      
+      if (data.user) {
+        console.log('User registered successfully:', data.user);
+        
+        const { error: profileError } = await supabase
+          .from('users')
+          .insert({
+            id: data.user.id,
+            first_name: name.split(' ')[0],
+            last_name: name.split(' ').slice(1).join(' '),
+            email: email,
+            created_at: new Date().toISOString(),
+          });
+          
+        if (profileError) {
+          console.error('Error creating user profile:', profileError);
+        }
+        
+        navigate('/');
+      }
     } catch (error) {
       console.error('Registration error:', error);
       setError('Registrierung fehlgeschlagen. Bitte versuchen Sie es erneut.');
