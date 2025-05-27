@@ -16,74 +16,79 @@ const RegisterPage: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    
-    if (password !== confirmPassword) {
-      setError('Die Passwörter stimmen nicht überein.');
+ const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setError('');
+
+  if (password !== confirmPassword) {
+    setError('Die Passwörter stimmen nicht überein.');
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    console.log('Registration attempt with:', { name, email });
+
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          name: name,
+        },
+      },
+    });
+
+    if (signUpError) {
+      console.error('❌ Signup error:', signUpError);
+      setError(
+        signUpError.message.includes('email')
+          ? 'Diese E-Mail-Adresse wird bereits verwendet.'
+          : `Registrierung fehlgeschlagen: ${signUpError.message}`
+      );
       return;
     }
-    
-    setLoading(true);
-    
-    try {
-      console.log('Registration attempt with:', { name, email });
-      
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            name: name,
-          },
-        },
-      });
-      
-      console.log('✅ Signup result:', data);
-      console.error('❌ Signup error:', signUpError);
 
-      if (signUpError) {
-        console.error('Supabase signup error:', signUpError);
-        
-        if (signUpError.message.includes('email')) {
-          setError('Diese E-Mail-Adresse wird bereits verwendet.');
-        } else {
-          setError(`Registrierung fehlgeschlagen: ${signUpError.message}`);
+    if (data.user) {
+      const nameParts = name.split(' ');
+      const firstName = nameParts[0];
+      const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+
+      const profileRes = await fetch(
+        'https://uxfggzqbsoizrvfujcxp.functions.supabase.co/createUserProfile',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${data.session?.access_token || ''}`
+          },
+          body: JSON.stringify({
+            user_id: data.user.id,
+            email: data.user.email,
+            first_name: firstName,
+            last_name: lastName
+          }),
         }
+      );
+
+      if (!profileRes.ok) {
+        console.error('Profil konnte nicht erstellt werden:', await profileRes.text());
+        setError('Registrierung fehlgeschlagen: Profil konnte nicht erstellt werden.');
         return;
       }
-      
-      if (data.user) {
-        console.log('User registered successfully:', data.user);
-        
-        const nameParts = name.split(' ');
-        const firstName = nameParts[0];
-        const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
-        
-//        const { error: profileError } = await supabase
-//          .from('users')
-//          .insert({
-//            uuid: data.user.id,
-//            email: data.user.email,
-//            first_name: firstName,
-//            last_name: lastName
-//          });
-//          
-//        if (profileError) {
-//          console.error('Error creating user profile:', profileError);
-//        }
-        
-        navigate('/');
-      }
-    } catch (error) {
-      console.error('Registration error:', error);
-      setError('Registrierung fehlgeschlagen. Bitte versuchen Sie es erneut.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
+      console.log('✅ User registered & profile created');
+      navigate('/');
+    }
+  } catch (error) {
+    console.error('Registration error:', error);
+    setError('Registrierung fehlgeschlagen. Bitte versuchen Sie es erneut.');
+  } finally {
+    setLoading(false);
+  }
+};
+ 
   return (
     <div className="container mx-auto px-4 py-8 flex justify-center">
       <Card className="w-full max-w-md">
