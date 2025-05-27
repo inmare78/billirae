@@ -40,6 +40,9 @@ const RegisterPage: React.FC = () => {
         },
       });
       
+      console.log('✅ Signup result:', data);
+      console.error('❌ Signup error:', signUpError);
+
       if (signUpError) {
         console.error('Supabase signup error:', signUpError);
         
@@ -58,18 +61,18 @@ const RegisterPage: React.FC = () => {
         const firstName = nameParts[0];
         const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
         
-        const { error: profileError } = await supabase
-          .from('users')
-          .insert({
-            uuid: data.user.id,
-            email: data.user.email,
-            first_name: firstName,
-            last_name: lastName
-          });
-          
-        if (profileError) {
-          console.error('Error creating user profile:', profileError);
-        }
+//        const { error: profileError } = await supabase
+//          .from('users')
+//          .insert({
+//            uuid: data.user.id,
+//            email: data.user.email,
+//            first_name: firstName,
+//            last_name: lastName
+//          });
+//          
+//        if (profileError) {
+//          console.error('Error creating user profile:', profileError);
+//        }
         
         navigate('/');
       }
