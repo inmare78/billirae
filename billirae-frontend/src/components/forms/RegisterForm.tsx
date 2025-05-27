@@ -66,10 +66,13 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ redirectTo = '/' }) => {
         const { error: profileError } = await supabase
           .from('users')
           .insert({
-            uuid: data.user.id,
+            id: data.user.id,
+            user_id: data.user.id,
+            customer_id: data.user.id,
             email: data.user.email,
             first_name: firstName,
-            last_name: lastName
+            last_name: lastName,
+            country: 'Austria'
           });
           
         if (profileError) {
