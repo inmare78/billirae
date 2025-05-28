@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Alert, AlertDescription } from '../components/ui/alert';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { userService } from '../services/api';
+import { supabase } from '../services/supabaseClient';
 
 interface ProfileData {
   company_name: string;
@@ -21,6 +24,7 @@ interface ProfileData {
 }
 
 const ProfilePage: React.FC = () => {
+  const navigate = useNavigate();
   const [profileData, setProfileData] = useState<ProfileData>({
     company_name: '',
     address: '',
@@ -37,6 +41,8 @@ const ProfilePage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -76,6 +82,26 @@ const ProfilePage: React.FC = () => {
       setError('Fehler beim Aktualisieren des Profils.');
     } finally {
       setSaving(false);
+    }
+  };
+  
+  const handleDeleteAccount = () => {
+    setDeleteDialogOpen(true);
+  };
+  
+  const confirmDeleteAccount = async () => {
+    setDeleting(true);
+    setError('');
+    
+    try {
+      await userService.deleteAccount();
+      await supabase.auth.signOut();
+      navigate('/');
+    } catch (err) {
+      console.error('Error deleting account:', err);
+      setError('Fehler beim Löschen des Kontos. Bitte versuchen Sie es später erneut.');
+      setDeleteDialogOpen(false);
+      setDeleting(false);
     }
   };
 
@@ -223,11 +249,31 @@ const ProfilePage: React.FC = () => {
             </a>
           </Button>
           
-          <Button variant="destructive">
+          <Button variant="destructive" onClick={handleDeleteAccount}>
             Konto löschen
           </Button>
         </CardFooter>
       </Card>
+      
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Konto löschen</DialogTitle>
+            <DialogDescription>
+              Sind Sie sicher, dass Sie Ihr Konto löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.
+              Alle Ihre Daten werden dauerhaft gelöscht.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} disabled={deleting}>
+              Abbrechen
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteAccount} disabled={deleting}>
+              {deleting ? 'Wird gelöscht...' : 'Konto löschen'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
