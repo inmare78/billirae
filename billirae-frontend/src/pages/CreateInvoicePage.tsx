@@ -7,6 +7,7 @@ import VoiceInput from '../components/voice/VoiceInput';
 import InvoicePreview from '../components/invoice/InvoicePreview';
 import { invoiceService, supabaseService } from '../services/api';
 import { checkSupabaseConnection } from '../services/supabaseClient';
+import { parseSupabaseError } from '../utils/supabaseErrorHandler';
 import jsPDF from 'jspdf';
 
 interface InvoiceData {
@@ -70,7 +71,7 @@ function CreateInvoicePage() {
         const { connected, error: connectionError } = await checkSupabaseConnection();
         if (!connected) {
           console.error('Supabase connection test failed:', connectionError);
-          setError(`Verbindungsproblem mit Supabase: ${connectionError instanceof Error ? connectionError.message : 'Netzwerkfehler'}`);
+          setError(`Verbindungsproblem mit Supabase: ${parseSupabaseError(connectionError)}`);
           setIsProcessing(false);
           return;
         }
@@ -92,7 +93,7 @@ function CreateInvoicePage() {
         } catch (supabaseError) {
           console.error('Error saving to Supabase:', supabaseError);
           setSupabaseSuccess(false);
-          const errorMessage = supabaseError instanceof Error ? supabaseError.message : 'Netzwerkfehler';
+          const errorMessage = parseSupabaseError(supabaseError);
           setError(`Fehler beim Speichern in Supabase: ${errorMessage}`);
         }
         
@@ -112,7 +113,7 @@ function CreateInvoicePage() {
         } catch (supabaseError) {
           console.error('Error saving to Supabase:', supabaseError);
           setSupabaseSuccess(false);
-          const errorMessage = supabaseError instanceof Error ? supabaseError.message : 'Netzwerkfehler';
+          const errorMessage = parseSupabaseError(supabaseError);
           setError(`Fehler beim Speichern in Supabase: ${errorMessage}`);
         }
         
@@ -121,7 +122,8 @@ function CreateInvoicePage() {
       }
     } catch (err) {
       console.error('Error creating invoice:', err);
-      setError('Fehler beim Erstellen der Rechnung. Bitte versuchen Sie es erneut.');
+      const errorMessage = parseSupabaseError(err);
+      setError(`Fehler beim Erstellen der Rechnung: ${errorMessage}`);
       setIsProcessing(false);
     }
   };
@@ -229,7 +231,8 @@ function CreateInvoicePage() {
       
     } catch (err) {
       console.error('Error generating PDF:', err);
-      setError('Fehler bei der PDF-Generierung. Bitte versuchen Sie es erneut.');
+      const errorMessage = parseSupabaseError(err);
+      setError(`Fehler bei der PDF-Generierung: ${errorMessage}`);
     } finally {
       setIsProcessing(false);
     }
@@ -282,7 +285,8 @@ function CreateInvoicePage() {
       setShowEmailForm(false);
     } catch (err) {
       console.error('Error sending email:', err);
-      setEmailError('Fehler beim Senden der E-Mail. Bitte überprüfen Sie die E-Mail-Adresse und versuchen Sie es erneut.');
+      const errorMessage = parseSupabaseError(err);
+      setEmailError(`Fehler beim Senden der E-Mail: ${errorMessage}`);
     } finally {
       setIsProcessing(false);
     }

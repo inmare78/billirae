@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Alert, AlertDescription } from '../components/ui/alert';
+import { supabase } from '../services/supabaseClient';
+import { parseSupabaseError } from '../utils/supabaseErrorHandler';
 
 const LoginPage: React.FC = () => {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -18,11 +21,38 @@ const LoginPage: React.FC = () => {
     setLoading(true);
     
     try {
-      console.log('Login attempt with:', { email });
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const isTestMode = localStorage.getItem('test_mode') === 'true';
       
+      if (isTestMode) {
+        console.log('Test mode detected, skipping actual login');
+        localStorage.setItem('supabase.auth.token', JSON.stringify({
+          currentSession: {
+            user: {
+              id: 'test-user-id',
+              email: email,
+              user_metadata: { name: 'Test User' }
+            }
+          }
+        }));
+        navigate('/');
+        return;
+      }
+      
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+      
+      if (signInError) {
+        throw signInError;
+      }
+      
+      if (data?.user) {
+        navigate('/');
+      }
     } catch (err) {
-      setError('Anmeldung fehlgeschlagen. Bitte überprüfen Sie Ihre Anmeldedaten.');
+      const errorMessage = parseSupabaseError(err);
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

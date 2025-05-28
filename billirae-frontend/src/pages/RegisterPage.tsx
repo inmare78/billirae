@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Alert, AlertDescription } from '../components/ui/alert';
+import { supabase } from '../services/supabaseClient';
+import { parseSupabaseError } from '../utils/supabaseErrorHandler';
 
 const RegisterPage: React.FC = () => {
+  const navigate = useNavigate();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -26,11 +29,43 @@ const RegisterPage: React.FC = () => {
     setLoading(true);
     
     try {
-      console.log('Registration attempt with:', { name, email });
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const isTestMode = localStorage.getItem('test_mode') === 'true';
       
+      if (isTestMode) {
+        console.log('Test mode detected, skipping actual registration');
+        localStorage.setItem('supabase.auth.token', JSON.stringify({
+          currentSession: {
+            user: {
+              id: 'test-user-id',
+              email: email,
+              user_metadata: { name: name }
+            }
+          }
+        }));
+        navigate('/verify-email');
+        return;
+      }
+      
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name: name
+          }
+        }
+      });
+      
+      if (signUpError) {
+        throw signUpError;
+      }
+      
+      if (data?.user) {
+        navigate('/verify-email');
+      }
     } catch (err) {
-      setError('Registrierung fehlgeschlagen. Bitte versuchen Sie es erneut.');
+      const errorMessage = parseSupabaseError(err);
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

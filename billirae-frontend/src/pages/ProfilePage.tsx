@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from '../components/ui/alert';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { userService } from '../services/api';
 import { supabase } from '../services/supabaseClient';
+import { parseSupabaseError } from '../utils/supabaseErrorHandler';
 
 interface ProfileData {
   company_name: string;
@@ -99,7 +100,8 @@ const ProfilePage: React.FC = () => {
       navigate('/');
     } catch (err) {
       console.error('Error deleting account:', err);
-      setError('Fehler beim Löschen des Kontos. Bitte versuchen Sie es später erneut.');
+      const errorMessage = parseSupabaseError(err);
+      setError(errorMessage);
       setDeleteDialogOpen(false);
       setDeleting(false);
     }
