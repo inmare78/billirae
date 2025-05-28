@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { logPageDebugInfo } from '../../src/utils/logPage';
+import { logRequestDebugInfo } from '../../src/utils/logRequest';
 
 // Mock data for testing - these values should match what's returned by the VoiceInput component in test mode
 const mockInvoiceData = {
@@ -84,6 +85,81 @@ test.describe('Invoice Creation Workflow', () => {
         takeScreenshot: true,
         stopTrace: true
       });
+      throw error;
+    }
+  });
+  
+  test('should log API request when creating an invoice', async ({ page }) => {
+    await logPageDebugInfo(page, 'Starting invoice creation API test');
+    
+    await page.getByLabel('Kunde').fill(mockInvoiceData.client);
+    await page.getByLabel('Leistung').fill(mockInvoiceData.service);
+    await page.getByLabel('Menge').fill(mockInvoiceData.quantity.toString());
+    await page.getByLabel('Preis pro Einheit').fill(mockInvoiceData.unit_price.toString());
+    
+    await logPageDebugInfo(page, 'Invoice form filled', { takeScreenshot: true });
+    
+    // Wait for the invoice creation API request
+    const responsePromise = page.waitForResponse(response => 
+      response.url().includes('/invoices') && 
+      response.request().method() === 'POST'
+    );
+    
+    const startTime = Date.now();
+    
+    // Click the create invoice button
+    await page.getByRole('button', { name: 'Rechnung erstellen' }).click();
+    await logPageDebugInfo(page, 'Clicked create invoice button');
+    
+    try {
+      // Wait for the API response
+      const response = await responsePromise;
+      
+      await logRequestDebugInfo(
+        response as any, // Type assertion to handle Response vs APIResponse
+        'Invoice Creation API', 
+        { startTime, maxBodyLength: 1000 },
+        'POST'
+      );
+      
+      // Verify the response status
+      expect(response.status()).toBe(201);
+      
+      // Verify the response contains expected data
+      const responseData = await response.json();
+      expect(responseData).toHaveProperty('id');
+      expect(responseData).toHaveProperty('invoice_number');
+      
+      await logPageDebugInfo(page, 'Invoice created successfully', { takeScreenshot: true });
+      
+      await page.waitForURL('**/invoices/*');
+      await expect(page.getByText('Rechnung erfolgreich erstellt')).toBeVisible();
+      
+      // Verify invoice details are displayed
+      await expect(page.getByText(mockInvoiceData.client)).toBeVisible();
+      await expect(page.getByText(mockInvoiceData.service)).toBeVisible();
+      
+      await logPageDebugInfo(page, 'Invoice details displayed in UI', { takeScreenshot: true });
+      
+    } catch (error) {
+      await logPageDebugInfo(page, `Invoice creation API error: ${error}`, { 
+        takeScreenshot: true,
+        startTrace: true,
+        stopTrace: true
+      });
+      
+      const errorResponse = await page.waitForResponse(response => 
+        response.url().includes('/invoices') && 
+        response.status() >= 400
+      );
+      
+      await logRequestDebugInfo(
+        errorResponse as any,
+        'Invoice Creation Error Response',
+        { maxBodyLength: 2000 },
+        'POST'
+      );
+      
       throw error;
     }
   });
