@@ -3,7 +3,7 @@
  * Centralizes logging and adds structured output for API debugging
  */
 
-import { APIResponse, Request } from '@playwright/test';
+import { APIResponse } from '@playwright/test';
 
 interface LogRequestOptions {
   maxBodyLength?: number;

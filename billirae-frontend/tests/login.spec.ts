@@ -25,7 +25,7 @@ test.describe('Login Page', () => {
     const response = await responsePromise;
     
     await logRequestDebugInfo(
-      response, 
+      response as any, // Type assertion to handle Response vs APIResponse
       'Login API', 
       { startTime, maxBodyLength: 500 },
       'POST'
@@ -35,7 +35,7 @@ test.describe('Login Page', () => {
     await logPageDebugInfo(page, 'Error message displayed', { takeScreenshot: true });
   });
   
-  test('should make API request with correct payload', async ({ page, request }) => {
+  test('should make API request with correct payload', async ({ page }) => {
     await page.getByLabel('E-Mail').fill('test@example.com');
     await page.getByLabel('Passwort').fill('password123');
     
@@ -49,7 +49,7 @@ test.describe('Login Page', () => {
     const response = await responsePromise;
     
     await logRequestDebugInfo(
-      response, 
+      response as any, // Type assertion to handle Response vs APIResponse
       'Login API Request', 
       { startTime, includeHeaders: true },
       'POST'
