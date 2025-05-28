@@ -35,7 +35,7 @@ test.describe('Invoice Creation Workflow', () => {
     });
     
     // Navigate to the create invoice page
-    await page.goto('http://localhost:5173/create-invoice');
+    await page.goto('/create-invoice');
   });
   
   test('should create an invoice via voice input', async ({ page }) => {
