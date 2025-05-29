@@ -7,6 +7,7 @@ import RegisterPage from './pages/RegisterPage'
 import VerifyEmailPage from './pages/VerifyEmailPage'
 import CreateInvoicePage from './pages/CreateInvoicePage'
 import ProfilePage from './pages/ProfilePage'
+import IncomeDashboardPage from './pages/dashboard/IncomeDashboardPage'
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
             <Route path="/verify-email" element={<VerifyEmailPage />} />
             <Route path="/create-invoice" element={<CreateInvoicePage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/dashboard" element={<IncomeDashboardPage />} />
           </Route>
         </Routes>
       </Router>
