@@ -128,12 +128,23 @@ test.describe('Invoice Creation Workflow', () => {
       }
     });
     
+    // Wait for invoice preview to be visible
+    await expect(page.getByText('Rechnungsvorschau')).toBeVisible();
+    await logPageDebugInfo(page, 'Invoice preview is visible');
+    
+    // Click the edit button to enable edit mode
+    await page.getByRole('button', { name: 'Bearbeiten' }).click();
+    await logPageDebugInfo(page, 'Clicked edit button to enable form editing');
+    
     await page.getByLabel('Kunde').fill(mockInvoices.invoice1.client);
     await page.getByLabel('Leistung').fill(mockInvoices.invoice1.service);
     await page.getByLabel('Menge').fill(mockInvoices.invoice1.quantity.toString());
-    await page.getByLabel('Preis pro Einheit').fill(mockInvoices.invoice1.unit_price.toString());
+    await page.getByLabel('Einzelpreis').fill(mockInvoices.invoice1.unit_price.toString());
     
     await logPageDebugInfo(page, 'Invoice form filled', { takeScreenshot: true });
+    
+    await page.getByRole('button', { name: 'Speichern' }).click();
+    await logPageDebugInfo(page, 'Clicked save button');
     
     // Click the create invoice button
     await page.getByRole('button', { name: 'Rechnung erstellen' }).click();
@@ -188,12 +199,24 @@ test.describe('Invoice Creation Workflow', () => {
       }
     });
     
+    // Wait for invoice preview to be visible
+    await expect(page.getByText('Rechnungsvorschau')).toBeVisible();
+    await logPageDebugInfo(page, 'Invoice preview is visible');
+    
+    // Click the edit button to enable edit mode
+    await page.getByRole('button', { name: 'Bearbeiten' }).click();
+    await logPageDebugInfo(page, 'Clicked edit button to enable form editing');
+    
+    // Now fill the form fields that are visible in edit mode
     await page.getByLabel('Kunde').fill(mockInvoices.invoice1.client);
     await page.getByLabel('Leistung').fill(mockInvoices.invoice1.service);
     await page.getByLabel('Menge').fill(mockInvoices.invoice1.quantity.toString());
-    await page.getByLabel('Preis pro Einheit').fill(mockInvoices.invoice1.unit_price.toString());
+    await page.getByLabel('Einzelpreis').fill(mockInvoices.invoice1.unit_price.toString());
     
     await logPageDebugInfo(page, 'Invoice form filled for error test', { takeScreenshot: true });
+    
+    await page.getByRole('button', { name: 'Speichern' }).click();
+    await logPageDebugInfo(page, 'Clicked save button');
     
     // Click the create invoice button
     await page.getByRole('button', { name: 'Rechnung erstellen' }).click();
