@@ -1,24 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { userService } from '../services/api';
-
-interface ProfileData {
-  company_name: string;
-  address: string;
-  tax_id: string;
-  email: string;
-  phone: string;
-  bank_name: string;
-  bank_account: string;
-  bank_iban: string;
-  bank_bic: string;
-  logo_url?: string;
-}
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog';
+import { supabaseProfileService, ProfileData } from '../services/supabaseProfileService';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '../services/supabaseClient';
+import { parseSupabaseError } from '../utils/supabaseErrorHandler';
+import { logPageDebugInfo } from '../utils/logPage';
 
 const ProfilePage: React.FC = () => {
   const [profileData, setProfileData] = useState<ProfileData>({
@@ -37,15 +29,32 @@ const ProfilePage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const data = await userService.getProfile();
+        if (process.env.ENABLE_PLAYWRIGHT_LOGGING === 'true') {
+          await logPageDebugInfo(window, 'Loading profile page');
+        }
+        
+        const data = await supabaseProfileService.getProfile();
         setProfileData(data);
-      } catch (err) {
+        
+        if (data.logo_url) {
+          setLogoPreview(data.logo_url);
+        }
+      } catch (err: any) {
         console.error('Error fetching profile:', err);
-        setError('Fehler beim Laden des Profils.');
+        setError(parseSupabaseError(err) || 'Fehler beim Laden des Profils.');
       } finally {
         setLoading(false);
       }
@@ -69,13 +78,102 @@ const ProfilePage: React.FC = () => {
     setError('');
 
     try {
-      await userService.updateProfile(profileData);
+      if (process.env.ENABLE_PLAYWRIGHT_LOGGING === 'true') {
+        await logPageDebugInfo(window, 'Saving profile data');
+      }
+      
+      if (logoFile) {
+        setUploadingLogo(true);
+        const logoUrl = await supabaseProfileService.uploadLogo(logoFile);
+        setProfileData(prev => ({
+          ...prev,
+          logo_url: logoUrl
+        }));
+        setUploadingLogo(false);
+      }
+      
+      await supabaseProfileService.updateProfile({
+        ...profileData,
+        logo_url: logoFile ? profileData.logo_url : (logoPreview || undefined)
+      });
+      
       setSuccess('Profil erfolgreich aktualisiert.');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error updating profile:', err);
-      setError('Fehler beim Aktualisieren des Profils.');
+      setError(parseSupabaseError(err) || 'Fehler beim Aktualisieren des Profils.');
     } finally {
       setSaving(false);
+    }
+  };
+  
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    if (!file.type.match('image.*')) {
+      setError('Bitte wählen Sie ein Bild aus (JPG, PNG, GIF).');
+      return;
+    }
+    
+    if (file.size > 2 * 1024 * 1024) {
+      setError('Das Bild darf maximal 2MB groß sein.');
+      return;
+    }
+    
+    setLogoFile(file);
+    
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setLogoPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+  
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmation !== 'LÖSCHEN') {
+      setError('Bitte geben Sie "LÖSCHEN" ein, um Ihr Konto zu löschen.');
+      return;
+    }
+    
+    setIsDeleting(true);
+    setError('');
+    
+    try {
+      if (process.env.ENABLE_PLAYWRIGHT_LOGGING === 'true') {
+        await logPageDebugInfo(window, 'Deleting account');
+      }
+      
+      await supabaseProfileService.deleteAccount();
+      await supabase.auth.signOut();
+      
+      navigate('/', { replace: true });
+    } catch (err: any) {
+      console.error('Error deleting account:', err);
+      setError(parseSupabaseError(err) || 'Fehler beim Löschen des Kontos.');
+      setIsDeleting(false);
+    }
+  };
+  
+  const handleExportData = async () => {
+    try {
+      if (process.env.ENABLE_PLAYWRIGHT_LOGGING === 'true') {
+        await logPageDebugInfo(window, 'Exporting user data');
+      }
+      
+      const data = await supabaseProfileService.exportUserData();
+      
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `billirae-export-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error('Error exporting data:', err);
+      setError(parseSupabaseError(err) || 'Fehler beim Exportieren der Daten.');
     }
   };
 
@@ -116,6 +214,47 @@ const ProfilePage: React.FC = () => {
             )}
             
             <div className="grid gap-6">
+              {/* Logo upload section */}
+              <div className="space-y-2">
+                <Label htmlFor="logo">Firmenlogo</Label>
+                <div className="flex items-center space-x-4">
+                  <div 
+                    className="w-24 h-24 border rounded-md flex items-center justify-center overflow-hidden bg-gray-50 dark:bg-gray-800"
+                  >
+                    {logoPreview ? (
+                      <img 
+                        src={logoPreview} 
+                        alt="Logo Vorschau" 
+                        className="max-w-full max-h-full object-contain"
+                      />
+                    ) : (
+                      <span className="text-gray-400">Kein Logo</span>
+                    )}
+                  </div>
+                  <div>
+                    <input
+                      type="file"
+                      id="logo"
+                      ref={fileInputRef}
+                      className="hidden"
+                      accept="image/*"
+                      onChange={handleLogoChange}
+                    />
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingLogo}
+                    >
+                      {uploadingLogo ? 'Wird hochgeladen...' : 'Logo auswählen'}
+                    </Button>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Max. 2MB (JPG, PNG, GIF)
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
               <div className="space-y-2">
                 <Label htmlFor="company_name">Firmenname</Label>
                 <Input
@@ -217,17 +356,51 @@ const ProfilePage: React.FC = () => {
           </form>
         </CardContent>
         <CardFooter className="flex justify-between">
-          <Button variant="outline" asChild>
-            <a href="/api/users/export" download>
-              Daten exportieren (GDPR)
-            </a>
+          <Button variant="outline" onClick={handleExportData}>
+            Daten exportieren (GDPR)
           </Button>
           
-          <Button variant="destructive">
+          <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
             Konto löschen
           </Button>
         </CardFooter>
       </Card>
+      
+      {/* Delete Account Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Konto löschen</DialogTitle>
+            <DialogDescription>
+              Diese Aktion kann nicht rückgängig gemacht werden. Alle Ihre Daten werden unwiderruflich gelöscht.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <p className="text-sm text-gray-500">
+              Geben Sie "LÖSCHEN" ein, um zu bestätigen:
+            </p>
+            <Input
+              value={deleteConfirmation}
+              onChange={(e) => setDeleteConfirmation(e.target.value)}
+              placeholder="LÖSCHEN"
+            />
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Abbrechen
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleDeleteAccount}
+              disabled={isDeleting || deleteConfirmation !== 'LÖSCHEN'}
+            >
+              {isDeleting ? 'Wird gelöscht...' : 'Konto löschen'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
