@@ -128,9 +128,15 @@ test.describe('Invoice Creation Workflow', () => {
       }
     });
     
-    // Wait for invoice preview to be visible
-    await expect(page.getByText('Rechnungsvorschau')).toBeVisible();
-    await logPageDebugInfo(page, 'Invoice preview is visible');
+    await page.getByRole('button', { name: 'Aufnehmen' }).click();
+    await logPageDebugInfo(page, 'Clicked record button to trigger voice input');
+    
+    // Wait for voice processing to complete
+    await page.waitForTimeout(2000);
+    
+    // Now wait for invoice preview to be visible
+    await expect(page.getByText('Kunde:')).toBeVisible({ timeout: 10000 });
+    await logPageDebugInfo(page, 'Invoice data is visible');
     
     // Click the edit button to enable edit mode
     await page.getByRole('button', { name: 'Bearbeiten' }).click();
@@ -199,9 +205,15 @@ test.describe('Invoice Creation Workflow', () => {
       }
     });
     
-    // Wait for invoice preview to be visible
-    await expect(page.getByText('Rechnungsvorschau')).toBeVisible();
-    await logPageDebugInfo(page, 'Invoice preview is visible');
+    await page.getByRole('button', { name: 'Aufnehmen' }).click();
+    await logPageDebugInfo(page, 'Clicked record button to trigger voice input');
+    
+    // Wait for voice processing to complete
+    await page.waitForTimeout(2000);
+    
+    // Now wait for invoice data to be visible
+    await expect(page.getByText('Kunde:')).toBeVisible({ timeout: 10000 });
+    await logPageDebugInfo(page, 'Invoice data is visible');
     
     // Click the edit button to enable edit mode
     await page.getByRole('button', { name: 'Bearbeiten' }).click();
