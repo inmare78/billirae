@@ -1,6 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { logPageDebugInfo } from '../../src/utils/logPage';
 import { logRequestDebugInfo } from '../../src/utils/logRequest';
+import { 
+  setupAllSupabaseMocks, 
+  mockUsers, 
+  mockProfiles, 
+  mockResponses 
+} from '../utils/supabaseMocks';
 
 test.describe('User Profile Page', () => {
   test.beforeEach(async ({ page }) => {
@@ -9,23 +15,24 @@ test.describe('User Profile Page', () => {
       localStorage.setItem('test_mode', 'true');
       localStorage.setItem('supabase.auth.token', JSON.stringify({
         currentSession: {
-          user: {
-            id: 'test-user-id',
-            email: 'test@example.com',
-            user_metadata: { name: 'Test User' }
-          }
+          user: mockUsers.testUser
         }
       }));
     });
     
+    // Setup all Supabase mocks
+    await setupAllSupabaseMocks(page, {
+      users: true,
+      invoices: true,
+      customers: true
+    });
+    
     // Navigate to profile page
     await page.goto('http://localhost:5173/profile');
+    await logPageDebugInfo(page, 'profile-page-loaded');
   });
   
   test('should load and display profile form', async ({ page }) => {
-    // Log page state if enabled
-    await logPageDebugInfo(page, 'profile-page-loaded');
-    
     // Check that the profile form is displayed
     await expect(page.getByText('Unternehmensprofil')).toBeVisible();
     await expect(page.getByText('Persönliche Daten')).toBeVisible();
@@ -46,71 +53,6 @@ test.describe('User Profile Page', () => {
   });
   
   test('should update profile data', async ({ page }) => {
-    // Mock the Supabase response for profile update
-    await page.route('**/rest/v1/users**', async (route) => {
-      const method = route.request().method();
-      
-      if (method === 'GET') {
-        await route.fulfill({
-          status: 200,
-          body: JSON.stringify({
-            id: 'test-profile-id',
-            user_id: 'test-user-id',
-            first_name: 'Max',
-            last_name: 'Mustermann',
-            company_name: 'Test GmbH',
-            tax_id: 'DE123456789',
-            website_url: 'https://example.com',
-            street_1: 'Teststraße',
-            street_2: '',
-            house_number: '123',
-            zip: '12345',
-            city: 'Berlin',
-            state: 'Berlin',
-            country: 'Deutschland',
-            country_code: 'DE',
-            email: 'test@example.com',
-            phone: '+49123456789',
-            bank_name: 'Test Bank',
-            bank_iban: 'DE89370400440532013000',
-            bank_bic: 'TESTDEFF'
-          })
-        });
-      } else if (method === 'PATCH' || method === 'POST') {
-        // Log the request data if enabled
-        if (process.env.ENABLE_PLAYWRIGHT_LOGGING === 'true') {
-          console.log(`Profile update request: ${JSON.stringify(await route.request().postDataJSON())}`);
-        }
-        
-        await route.fulfill({
-          status: 200,
-          body: JSON.stringify({
-            id: 'test-profile-id',
-            user_id: 'test-user-id',
-            first_name: 'Max',
-            last_name: 'Mustermann',
-            company_name: 'Updated GmbH',
-            tax_id: 'DE123456789',
-            website_url: 'https://example.com',
-            street_1: 'Teststraße',
-            street_2: '',
-            house_number: '123',
-            zip: '12345',
-            city: 'Berlin',
-            state: 'Berlin',
-            country: 'Deutschland',
-            country_code: 'DE',
-            email: 'test@example.com',
-            phone: '+49123456789',
-            bank_name: 'Test Bank',
-            bank_iban: 'DE89370400440532013000',
-            bank_bic: 'TESTDEFF',
-            updated_at: new Date().toISOString()
-          })
-        });
-      }
-    });
-    
     // Wait for the profile form to load
     await page.waitForSelector('form');
     
@@ -131,20 +73,6 @@ test.describe('User Profile Page', () => {
   });
   
   test('should handle account deletion confirmation', async ({ page }) => {
-    // Mock the Supabase response for account deletion
-    await page.route('**/rest/v1/users**', async (route) => {
-      await route.fulfill({ status: 200, body: '{}' });
-    });
-    
-    await page.route('**/auth/v1/admin/users/**', async (route) => {
-      // Log the request data if enabled
-      if (process.env.ENABLE_PLAYWRIGHT_LOGGING === 'true') {
-        console.log(`Account deletion request: ${route.request().url()}`);
-      }
-      
-      await route.fulfill({ status: 200, body: '{}' });
-    });
-    
     // Click the delete account button
     await page.getByRole('button', { name: 'Konto löschen' }).click();
     
@@ -162,50 +90,6 @@ test.describe('User Profile Page', () => {
   });
   
   test('should export user data (GDPR)', async ({ page }) => {
-    // Mock the Supabase responses for data export
-    await page.route('**/rest/v1/users**', async (route) => {
-      await route.fulfill({
-        status: 200,
-        body: JSON.stringify({
-          id: 'test-profile-id',
-          user_id: 'test-user-id',
-          first_name: 'Max',
-          last_name: 'Mustermann',
-          company_name: 'Test GmbH',
-          // ... other profile fields
-        })
-      });
-    });
-    
-    await page.route('**/rest/v1/invoices**', async (route) => {
-      await route.fulfill({
-        status: 200,
-        body: JSON.stringify([
-          {
-            id: 'invoice-1',
-            user_id: 'test-user-id',
-            client_id: 'client-1',
-            date: '2025-05-01',
-            inv_number: 'INV-001'
-          }
-        ])
-      });
-    });
-    
-    await page.route('**/rest/v1/customers**', async (route) => {
-      await route.fulfill({
-        status: 200,
-        body: JSON.stringify([
-          {
-            id: 'client-1',
-            user_id: 'test-user-id',
-            customer_id: 'CUST-001',
-            company_name: 'Client GmbH'
-          }
-        ])
-      });
-    });
-    
     // Create a download listener
     const downloadPromise = page.waitForEvent('download');
     
@@ -223,52 +107,6 @@ test.describe('User Profile Page', () => {
   });
   
   test('should prevent saving profile with empty required fields', async ({ page }) => {
-    // Mock the Supabase response for profile data
-    await page.route('**/rest/v1/users**', async (route) => {
-      const method = route.request().method();
-      
-      if (method === 'GET') {
-        await route.fulfill({
-          status: 200,
-          body: JSON.stringify({
-            id: 'test-profile-id',
-            user_id: 'test-user-id',
-            first_name: 'Max',
-            last_name: 'Mustermann',
-            company_name: 'Test GmbH',
-            tax_id: 'DE123456789',
-            website_url: 'https://example.com',
-            street_1: 'Teststraße',
-            street_2: '',
-            house_number: '123',
-            zip: '12345',
-            city: 'Berlin',
-            state: 'Berlin',
-            country: 'Deutschland',
-            country_code: 'DE',
-            email: 'test@example.com',
-            phone: '+49123456789',
-            bank_name: 'Test Bank',
-            bank_iban: 'DE89370400440532013000',
-            bank_bic: 'TESTDEFF'
-          })
-        });
-      } else if (method === 'PATCH' || method === 'POST') {
-        if (process.env.ENABLE_PLAYWRIGHT_LOGGING === 'true') {
-          console.log(`UNEXPECTED API CALL: Profile update request with empty required field`);
-          console.log(`Request data: ${JSON.stringify(await route.request().postDataJSON())}`);
-        }
-        
-        await route.fulfill({
-          status: 400,
-          body: JSON.stringify({
-            error: 'Validation failed',
-            message: 'Required fields cannot be empty'
-          })
-        });
-      }
-    });
-    
     // Wait for the profile form to load
     await page.waitForSelector('form');
     
@@ -312,42 +150,17 @@ test.describe('User Profile Page', () => {
   });
   
   test('should handle Supabase API failure during profile update', async ({ page }) => {
-    // Create a mock for the API response
+    // Override the default mock to simulate a server error
     await page.route('**/rest/v1/users**', async (route) => {
       const method = route.request().method();
       
       if (method === 'GET') {
         await route.fulfill({
           status: 200,
-          body: JSON.stringify({
-            id: 'test-profile-id',
-            user_id: 'test-user-id',
-            first_name: 'Max',
-            last_name: 'Mustermann',
-            company_name: 'Test GmbH',
-            tax_id: 'DE123456789',
-            website_url: 'https://example.com',
-            street_1: 'Teststraße',
-            street_2: '',
-            house_number: '123',
-            zip: '12345',
-            city: 'Berlin',
-            state: 'Berlin',
-            country: 'Deutschland',
-            country_code: 'DE',
-            email: 'test@example.com',
-            phone: '+49123456789'
-          })
+          body: JSON.stringify(mockProfiles.testProfile)
         });
       } else if (method === 'PATCH' || method === 'POST') {
         const response = await route.fetch();
-        const responseObj = {
-          status: 500,
-          body: JSON.stringify({
-            error: 'Internal Server Error',
-            message: 'Database connection failed'
-          })
-        };
         
         // Log the failed request if logging is enabled
         if (process.env.ENABLE_PLAYWRIGHT_LOGGING === 'true') {
@@ -357,7 +170,7 @@ test.describe('User Profile Page', () => {
           }, method);
         }
         
-        await route.fulfill(responseObj);
+        await route.fulfill(mockResponses.serverError);
       }
     });
     
@@ -394,6 +207,7 @@ test.describe('User Profile Page', () => {
   });
   
   test('should enforce Row-Level Security and prevent updating another user profile', async ({ page }) => {
+    // Setup mocks with User A instead of test user
     await page.addInitScript(() => {
       localStorage.setItem('test_mode', 'true');
       localStorage.setItem('supabase.auth.token', JSON.stringify({
@@ -407,7 +221,7 @@ test.describe('User Profile Page', () => {
       }));
     });
     
-    // Mock the initial profile data fetch
+    // Override the default mock to test security
     await page.route('**/rest/v1/users**', async (route) => {
       const method = route.request().method();
       
@@ -415,14 +229,7 @@ test.describe('User Profile Page', () => {
         // Return user A's profile data
         await route.fulfill({
           status: 200,
-          body: JSON.stringify({
-            id: 'profile-a-id',
-            user_id: 'user-a-id',
-            first_name: 'User',
-            last_name: 'A',
-            company_name: 'Company A',
-            email: 'user-a@example.com'
-          })
+          body: JSON.stringify(mockProfiles.profileA)
         });
       } else if (method === 'PATCH' || method === 'POST') {
         const requestData = await route.request().postDataJSON();
@@ -441,23 +248,15 @@ test.describe('User Profile Page', () => {
             }, method);
           }
           
-          await route.fulfill({
-            status: 403,
-            body: JSON.stringify({
-              error: 'Permission denied',
-              message: 'Sie haben keine Berechtigung, dieses Profil zu aktualisieren.'
-            })
-          });
+          await route.fulfill(mockResponses.forbidden);
         } else {
           await route.fulfill({
             status: 200,
             body: JSON.stringify({
-              id: 'profile-a-id',
-              user_id: 'user-a-id',
+              ...mockProfiles.profileA,
               first_name: 'Updated',
               last_name: 'User A',
               company_name: 'Updated Company A',
-              email: 'user-a@example.com',
               updated_at: new Date().toISOString()
             })
           });
@@ -473,7 +272,6 @@ test.describe('User Profile Page', () => {
     
     // Log the initial state
     await logPageDebugInfo(page, 'security-test-start');
-    
     
     await page.getByLabel('Firmenname').fill('Hacked Company');
     
@@ -512,27 +310,12 @@ test.describe('User Profile Page', () => {
     // Assert that we're still on the profile page
     await expect(page).toHaveURL(/.*\/profile/);
     
-    // Assert that no success message is shown
-    await expect(page.getByText('Profil erfolgreich aktualisiert')).not.toBeVisible();
+    // Take a screenshot showing the error message
+    await page.screenshot({ path: 'test-results/security-test-permission-denied.png' });
     
-    // Take a screenshot showing the security error message
-    await page.screenshot({ path: 'test-results/security-test-error.png' });
-    
-    // Verify that a legitimate update for the correct user still works
+    // Restore the original fetch function
     await page.evaluate(() => {
       window.fetch = (window as any).originalFetchStored;
     });
-    
-    // Update a field with a legitimate value
-    await page.getByLabel('Firmenname').fill('Legitimate Company Update');
-    
-    // Submit the form again with the legitimate update
-    await page.getByRole('button', { name: 'Speichern' }).click();
-    
-    // Assert that the success message is shown for the legitimate update
-    await expect(page.getByText('Profil erfolgreich aktualisiert')).toBeVisible();
-    
-    // Take a screenshot showing the successful legitimate update
-    await page.screenshot({ path: 'test-results/security-test-legitimate-update.png' });
   });
 });

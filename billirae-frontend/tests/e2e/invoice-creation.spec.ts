@@ -1,33 +1,34 @@
 import { test, expect } from '@playwright/test';
 import { logPageDebugInfo } from '../../src/utils/logPage';
 import { logRequestDebugInfo } from '../../src/utils/logRequest';
-
-// Mock data for testing - these values should match what's returned by the VoiceInput component in test mode
-const mockInvoiceData = {
-  client: "Max Mustermann",
-  service: "Massage",
-  quantity: 3,
-  unit_price: 80,
-  tax_rate: 0.2,
-  invoice_date: new Date().toISOString().split('T')[0],
-  currency: "EUR",
-  language: "de"
-};
-
-// const mockEmailData = {
-//   recipient_email: "kunde@beispiel.de",
-//   subject: "Rechnung: Massage",
-//   message: "Sehr geehrte(r) Max Mustermann,\n\nanbei erhalten Sie Ihre Rechnung für Massage.\n\nMit freundlichen Grüßen"
-// };
+import { 
+  setupAllSupabaseMocks, 
+  mockUsers, 
+  mockInvoices 
+} from '../utils/supabaseMocks';
 
 test.describe('Invoice Creation Workflow', () => {
   test.beforeEach(async ({ page }) => {
     // Enable test mode
     await page.addInitScript(() => {
       localStorage.setItem('test_mode', 'true');
+      localStorage.setItem('supabase.auth.token', JSON.stringify({
+        currentSession: {
+          user: mockUsers.testUser
+        }
+      }));
     });
+    
+    // Setup all Supabase mocks
+    await setupAllSupabaseMocks(page, {
+      users: true,
+      invoices: true,
+      customers: true
+    });
+    
     await logPageDebugInfo(page, 'Test mode enabled via localStorage');
     
+    // Mock PDF download
     await page.route('**/mock-invoice.pdf', async (route) => {
       await route.fulfill({
         status: 200,
@@ -66,8 +67,8 @@ test.describe('Invoice Creation Workflow', () => {
         await expect(page.getByText('Kunde: Max Mustermann', { exact: false })).toBeVisible({ timeout: 10000 });
         
         // Verify other invoice data is displayed correctly
-        await expect(page.getByText(`Leistung: ${mockInvoiceData.service}`, { exact: false })).toBeVisible();
-        await expect(page.getByText(`Menge: ${mockInvoiceData.quantity}`, { exact: false })).toBeVisible();
+        await expect(page.getByText(`Leistung: ${mockInvoices.invoice1.service}`, { exact: false })).toBeVisible();
+        await expect(page.getByText(`Menge: ${mockInvoices.invoice1.quantity}`, { exact: false })).toBeVisible();
         
         await logPageDebugInfo(page, 'Invoice data displayed successfully', { 
           takeScreenshot: true,
@@ -92,75 +93,117 @@ test.describe('Invoice Creation Workflow', () => {
   test('should log API request when creating an invoice', async ({ page }) => {
     await logPageDebugInfo(page, 'Starting invoice creation API test');
     
-    await page.getByLabel('Kunde').fill(mockInvoiceData.client);
-    await page.getByLabel('Leistung').fill(mockInvoiceData.service);
-    await page.getByLabel('Menge').fill(mockInvoiceData.quantity.toString());
-    await page.getByLabel('Preis pro Einheit').fill(mockInvoiceData.unit_price.toString());
+    // Override the invoice creation mock to capture the request
+    let capturedRequest: any = null;
+    
+    await page.route('**/rest/v1/invoices**', async (route) => {
+      const method = route.request().method();
+      
+      if (method === 'POST') {
+        capturedRequest = await route.request().postDataJSON();
+        
+        if (process.env.ENABLE_PLAYWRIGHT_LOGGING === 'true') {
+          console.log(`Invoice creation request: ${JSON.stringify(capturedRequest)}`);
+        }
+        
+        await route.fulfill({
+          status: 201,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            ...mockInvoices.invoice1,
+            id: 'new-invoice-id',
+            invoice_number: 'INV-002',
+            created_at: new Date().toISOString()
+          })
+        });
+        
+        if (process.env.ENABLE_PLAYWRIGHT_LOGGING === 'true') {
+          await logRequestDebugInfo(
+            await route.fetch(),
+            'Invoice Creation API', 
+            { maxBodyLength: 1000 },
+            'POST'
+          );
+        }
+      }
+    });
+    
+    await page.getByLabel('Kunde').fill(mockInvoices.invoice1.client);
+    await page.getByLabel('Leistung').fill(mockInvoices.invoice1.service);
+    await page.getByLabel('Menge').fill(mockInvoices.invoice1.quantity.toString());
+    await page.getByLabel('Preis pro Einheit').fill(mockInvoices.invoice1.unit_price.toString());
     
     await logPageDebugInfo(page, 'Invoice form filled', { takeScreenshot: true });
-    
-    // Wait for the invoice creation API request
-    const responsePromise = page.waitForResponse(response => 
-      response.url().includes('/invoices') && 
-      response.request().method() === 'POST'
-    );
-    
-    const startTime = Date.now();
     
     // Click the create invoice button
     await page.getByRole('button', { name: 'Rechnung erstellen' }).click();
     await logPageDebugInfo(page, 'Clicked create invoice button');
     
-    try {
-      // Wait for the API response
-      const response = await responsePromise;
+    // Wait for navigation or success message
+    await expect(page.getByText('Rechnung erfolgreich erstellt')).toBeVisible({ timeout: 5000 });
+    
+    // Verify the request was captured
+    expect(capturedRequest).not.toBeNull();
+    expect(capturedRequest).toHaveProperty('client', mockInvoices.invoice1.client);
+    expect(capturedRequest).toHaveProperty('service', mockInvoices.invoice1.service);
+    
+    await logPageDebugInfo(page, 'Invoice created successfully', { takeScreenshot: true });
+    
+    // Verify invoice details are displayed
+    await expect(page.getByText(mockInvoices.invoice1.client)).toBeVisible();
+    await expect(page.getByText(mockInvoices.invoice1.service)).toBeVisible();
+    
+    await logPageDebugInfo(page, 'Invoice details displayed in UI', { takeScreenshot: true });
+  });
+  
+  test('should handle API errors when creating an invoice', async ({ page }) => {
+    // Override the invoice creation mock to simulate an error
+    await page.route('**/rest/v1/invoices**', async (route) => {
+      const method = route.request().method();
       
-      await logRequestDebugInfo(
-        response as any, // Type assertion to handle Response vs APIResponse
-        'Invoice Creation API', 
-        { startTime, maxBodyLength: 1000 },
-        'POST'
-      );
-      
-      // Verify the response status
-      expect(response.status()).toBe(201);
-      
-      // Verify the response contains expected data
-      const responseData = await response.json();
-      expect(responseData).toHaveProperty('id');
-      expect(responseData).toHaveProperty('invoice_number');
-      
-      await logPageDebugInfo(page, 'Invoice created successfully', { takeScreenshot: true });
-      
-      await page.waitForURL('**/invoices/*');
-      await expect(page.getByText('Rechnung erfolgreich erstellt')).toBeVisible();
-      
-      // Verify invoice details are displayed
-      await expect(page.getByText(mockInvoiceData.client)).toBeVisible();
-      await expect(page.getByText(mockInvoiceData.service)).toBeVisible();
-      
-      await logPageDebugInfo(page, 'Invoice details displayed in UI', { takeScreenshot: true });
-      
-    } catch (error) {
-      await logPageDebugInfo(page, `Invoice creation API error: ${error}`, { 
-        takeScreenshot: true,
-        startTrace: true,
-        stopTrace: true
-      });
-      
-      const errorResponse = await page.waitForResponse(response => 
-        response.url().includes('/invoices') && 
-        response.status() >= 400
-      );
-      
-      await logRequestDebugInfo(
-        errorResponse as any,
-        'Invoice Creation Error Response',
-        { maxBodyLength: 2000 },
-        'POST'
-      );
-      
-      throw error;
-    }
+      if (method === 'POST') {
+        const requestData = await route.request().postDataJSON();
+        
+        if (process.env.ENABLE_PLAYWRIGHT_LOGGING === 'true') {
+          console.log(`Invoice creation error test - request: ${JSON.stringify(requestData)}`);
+        }
+        
+        await route.fulfill({
+          status: 500,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            error: 'Internal Server Error',
+            message: 'Database connection failed'
+          })
+        });
+        
+        if (process.env.ENABLE_PLAYWRIGHT_LOGGING === 'true') {
+          await logRequestDebugInfo(
+            await route.fetch(),
+            'Invoice Creation Error Response',
+            { maxBodyLength: 2000 },
+            'POST'
+          );
+        }
+      }
+    });
+    
+    await page.getByLabel('Kunde').fill(mockInvoices.invoice1.client);
+    await page.getByLabel('Leistung').fill(mockInvoices.invoice1.service);
+    await page.getByLabel('Menge').fill(mockInvoices.invoice1.quantity.toString());
+    await page.getByLabel('Preis pro Einheit').fill(mockInvoices.invoice1.unit_price.toString());
+    
+    await logPageDebugInfo(page, 'Invoice form filled for error test', { takeScreenshot: true });
+    
+    // Click the create invoice button
+    await page.getByRole('button', { name: 'Rechnung erstellen' }).click();
+    
+    // Check for error message
+    await expect(page.getByRole('alert')).toBeVisible();
+    await expect(page.getByText('Ein Serverfehler ist aufgetreten')).toBeVisible();
+    
+    await logPageDebugInfo(page, 'Error message displayed for failed invoice creation', { 
+      takeScreenshot: true 
+    });
   });
 });
