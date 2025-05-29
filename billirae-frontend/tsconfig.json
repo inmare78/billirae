@@ -1,5 +1,6 @@
 {
   "extends": "./tsconfig.app.json",
-  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.d.ts", "tests/**/*.ts", "tests/**/*.tsx"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.d.ts"],
+  "exclude": ["tests", "**/*.spec.ts", "playwright.config.ts"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

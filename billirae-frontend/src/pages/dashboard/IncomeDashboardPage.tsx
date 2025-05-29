@@ -6,7 +6,6 @@ import YearlySummaryCard from '../../components/dashboard/YearlySummaryCard';
 import { logPageDebugInfo } from '../../utils/logPage';
 
 const IncomeDashboardPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<string>('monthly');
   const [useMockData, setUseMockData] = useState<boolean>(
     localStorage.getItem('test_mode') === 'true'
   );
@@ -22,8 +21,6 @@ const IncomeDashboardPage: React.FC = () => {
   }, []);
 
   const handleTabChange = (value: string) => {
-    setActiveTab(value);
-    
     if (process.env.ENABLE_PLAYWRIGHT_LOGGING === 'true') {
       logPageDebugInfo(
         window as any, 
