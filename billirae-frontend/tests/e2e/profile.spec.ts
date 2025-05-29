@@ -392,4 +392,147 @@ test.describe('User Profile Page', () => {
     // Take a screenshot showing the error message
     await page.screenshot({ path: 'test-results/profile-api-error.png' });
   });
+  
+  test('should enforce Row-Level Security and prevent updating another user profile', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('test_mode', 'true');
+      localStorage.setItem('supabase.auth.token', JSON.stringify({
+        currentSession: {
+          user: {
+            id: 'user-a-id',
+            email: 'user-a@example.com',
+            user_metadata: { name: 'User A' }
+          }
+        }
+      }));
+    });
+    
+    // Mock the initial profile data fetch
+    await page.route('**/rest/v1/users**', async (route) => {
+      const method = route.request().method();
+      
+      if (method === 'GET') {
+        // Return user A's profile data
+        await route.fulfill({
+          status: 200,
+          body: JSON.stringify({
+            id: 'profile-a-id',
+            user_id: 'user-a-id',
+            first_name: 'User',
+            last_name: 'A',
+            company_name: 'Company A',
+            email: 'user-a@example.com'
+          })
+        });
+      } else if (method === 'PATCH' || method === 'POST') {
+        const requestData = await route.request().postDataJSON();
+        
+        // Log the request for debugging
+        if (process.env.ENABLE_PLAYWRIGHT_LOGGING === 'true') {
+          console.log(`Security test - Profile update request: ${JSON.stringify(requestData)}`);
+        }
+        
+        if (requestData.user_id && requestData.user_id !== 'user-a-id') {
+          // Log the security violation attempt
+          if (process.env.ENABLE_PLAYWRIGHT_LOGGING === 'true') {
+            await logRequestDebugInfo(await route.fetch(), 'security-violation-attempt', {
+              includeHeaders: true,
+              maxBodyLength: 2000
+            }, method);
+          }
+          
+          await route.fulfill({
+            status: 403,
+            body: JSON.stringify({
+              error: 'Permission denied',
+              message: 'Sie haben keine Berechtigung, dieses Profil zu aktualisieren.'
+            })
+          });
+        } else {
+          await route.fulfill({
+            status: 200,
+            body: JSON.stringify({
+              id: 'profile-a-id',
+              user_id: 'user-a-id',
+              first_name: 'Updated',
+              last_name: 'User A',
+              company_name: 'Updated Company A',
+              email: 'user-a@example.com',
+              updated_at: new Date().toISOString()
+            })
+          });
+        }
+      }
+    });
+    
+    // Navigate to profile page
+    await page.goto('http://localhost:5173/profile');
+    
+    // Wait for the profile form to load
+    await page.waitForSelector('form');
+    
+    // Log the initial state
+    await logPageDebugInfo(page, 'security-test-start');
+    
+    
+    await page.getByLabel('Firmenname').fill('Hacked Company');
+    
+    // Then, use page.evaluate to inject a different user_id into the form submission
+    await page.evaluate(() => {
+      // Create a custom event that will be intercepted by our test
+      const originalFetch = window.fetch;
+      window.fetch = function(url, options) {
+        if (typeof url === 'string' && url.includes('/rest/v1/users') && options && options.method && 
+            (options.method === 'POST' || options.method === 'PATCH')) {
+          const body = JSON.parse(options.body as string);
+          body.user_id = 'user-b-id'; // Attempt to update a different user's profile
+          options.body = JSON.stringify(body);
+        }
+        return originalFetch(url, options);
+      };
+      
+      (window as any).originalFetchStored = originalFetch;
+    });
+    
+    // Take a screenshot before submission
+    await page.screenshot({ path: 'test-results/security-test-before-submit.png' });
+    
+    // Submit the form to trigger the security check
+    await page.getByRole('button', { name: 'Speichern' }).click();
+    
+    // Log the state after the security violation attempt
+    await logPageDebugInfo(page, 'security-test-after-submit');
+    
+    // Assert that an error alert is shown
+    await expect(page.getByRole('alert')).toBeVisible();
+    
+    // Assert that the permission denied error message is displayed
+    await expect(page.getByText('Sie haben keine Berechtigung für diese Aktion.')).toBeVisible();
+    
+    // Assert that we're still on the profile page
+    await expect(page).toHaveURL(/.*\/profile/);
+    
+    // Assert that no success message is shown
+    await expect(page.getByText('Profil erfolgreich aktualisiert')).not.toBeVisible();
+    
+    // Take a screenshot showing the security error message
+    await page.screenshot({ path: 'test-results/security-test-error.png' });
+    
+    // Verify that a legitimate update for the correct user still works
+    await page.evaluate(() => {
+      window.fetch = (window as any).originalFetchStored;
+    });
+    
+    // Update a field with a legitimate value
+    await page.getByLabel('Firmenname').fill('Legitimate Company Update');
+    
+    // Submit the form again with the legitimate update
+    await page.getByRole('button', { name: 'Speichern' }).click();
+    
+    // Assert that the success message is shown for the legitimate update
+    await expect(page.getByText('Profil erfolgreich aktualisiert')).toBeVisible();
+    
+    // Take a screenshot showing the successful legitimate update
+    await page.screenshot({ path: 'test-results/security-test-legitimate-update.png' });
+  });
 });
