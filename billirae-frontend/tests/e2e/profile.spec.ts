@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { logPageDebugInfo } from '../../src/utils/logPage';
+import { logRequestDebugInfo } from '../../src/utils/logRequest';
 
 test.describe('User Profile Page', () => {
   test.beforeEach(async ({ page }) => {
@@ -308,5 +309,87 @@ test.describe('User Profile Page', () => {
     
     // Take a final screenshot showing the validation error
     await page.screenshot({ path: 'test-results/profile-validation-error.png' });
+  });
+  
+  test('should handle Supabase API failure during profile update', async ({ page }) => {
+    // Create a mock for the API response
+    await page.route('**/rest/v1/users**', async (route) => {
+      const method = route.request().method();
+      
+      if (method === 'GET') {
+        await route.fulfill({
+          status: 200,
+          body: JSON.stringify({
+            id: 'test-profile-id',
+            user_id: 'test-user-id',
+            first_name: 'Max',
+            last_name: 'Mustermann',
+            company_name: 'Test GmbH',
+            tax_id: 'DE123456789',
+            website_url: 'https://example.com',
+            street_1: 'Teststraße',
+            street_2: '',
+            house_number: '123',
+            zip: '12345',
+            city: 'Berlin',
+            state: 'Berlin',
+            country: 'Deutschland',
+            country_code: 'DE',
+            email: 'test@example.com',
+            phone: '+49123456789'
+          })
+        });
+      } else if (method === 'PATCH' || method === 'POST') {
+        const response = await route.fetch();
+        const responseObj = {
+          status: 500,
+          body: JSON.stringify({
+            error: 'Internal Server Error',
+            message: 'Database connection failed'
+          })
+        };
+        
+        // Log the failed request if logging is enabled
+        if (process.env.ENABLE_PLAYWRIGHT_LOGGING === 'true') {
+          await logRequestDebugInfo(response, 'profile-update-failed-response', {
+            includeHeaders: true,
+            maxBodyLength: 2000
+          }, method);
+        }
+        
+        await route.fulfill(responseObj);
+      }
+    });
+    
+    // Wait for the profile form to load
+    await page.waitForSelector('form');
+    
+    // Log the initial state
+    await logPageDebugInfo(page, 'profile-api-failure-test-start');
+    
+    // Update a field in the form
+    await page.getByLabel('Firmenname').fill('Updated Company Name');
+    
+    // Take a screenshot before submission
+    await page.screenshot({ path: 'test-results/profile-before-api-error.png' });
+    
+    // Submit the form to trigger the API error
+    await page.getByRole('button', { name: 'Speichern' }).click();
+    
+    // Log the state after the error
+    await logPageDebugInfo(page, 'profile-after-api-error');
+    
+    await expect(page.getByRole('alert')).toBeVisible();
+    
+    // Assert that the error message from parseSupabaseError is displayed
+    await expect(page.getByText('Ein Serverfehler ist aufgetreten. Bitte versuchen Sie es später erneut.')).toBeVisible();
+    
+    // Assert that we're still on the profile page
+    await expect(page).toHaveURL(/.*\/profile/);
+    
+    await expect(page.getByText('Profil erfolgreich aktualisiert')).not.toBeVisible();
+    
+    // Take a screenshot showing the error message
+    await page.screenshot({ path: 'test-results/profile-api-error.png' });
   });
 });
