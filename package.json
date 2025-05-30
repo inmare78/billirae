@@ -1,0 +1,9 @@
+{
+  "name": "billirae",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "cd billirae-frontend && npm run build",
+    "dev": "cd billirae-frontend && npm run dev"
+  },
+  "workspaces": ["billirae-frontend"]
+}
