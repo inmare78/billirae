@@ -1,15 +1,20 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Session, User, AuthError } from '@supabase/supabase-js';
+import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../services/supabaseClient';
 import { parseSupabaseError } from '../utils/supabaseErrorHandler';
+
+type AuthResult = {
+  success: boolean;
+  error?: string;
+};
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
   error: string | null;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  register: (email: string, password: string, name: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<AuthResult>;
+  register: (email: string, password: string, name: string) => Promise<AuthResult>;
   logout: () => Promise<void>;
   resetError: () => void;
 }
@@ -51,7 +56,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     initializeAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, newSession) => {
+      async (_, newSession) => {
         setSession(newSession);
         setUser(newSession?.user || null);
         setLoading(false);
