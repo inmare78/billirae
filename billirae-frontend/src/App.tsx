@@ -7,7 +7,7 @@ import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import VerifyEmailPage from './pages/VerifyEmailPage'
 import CreateInvoicePage from './pages/CreateInvoicePage'
-import ProfilePage from './pages/ProfilePage'
+import ProfilePage from './pages/Profile'
 import IncomeDashboardPage from './pages/dashboard/IncomeDashboardPage'
 import AuthGuard from './components/auth/AuthGuard'
 
