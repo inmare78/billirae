@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -14,6 +14,7 @@ const LoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   
   const { login } = useAuth();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,6 +26,9 @@ const LoginPage: React.FC = () => {
       
       if (!result.success) {
         setError(result.error || 'Anmeldung fehlgeschlagen. Bitte überprüfen Sie Ihre Anmeldedaten.');
+      } else {
+        navigate('/dashboard'); // Navigate to dashboard after successful login
+        console.log('Login successful, navigating to dashboard');
       }
     } catch (err) {
       setError('Ein unerwarteter Fehler ist aufgetreten.');
