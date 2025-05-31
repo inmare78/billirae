@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { Routes, Route } from 'react-router-dom'
 import { ThemeProvider } from './lib/theme-provider'
 import { AuthProvider } from './contexts/AuthContext'
 import Layout from './components/layout/Layout'
@@ -15,34 +15,33 @@ function App() {
   return (
     <ThemeProvider defaultTheme="light" storageKey="billirae-theme">
       <AuthProvider>
-        <Router>
-          <Routes>
-            <Route path="/" element={<Layout />}>
-              <Route index element={<HomePage />} />
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/register" element={<RegisterPage />} />
-              <Route path="/verify-email" element={<VerifyEmailPage />} />
-              <Route path="/create-invoice" element={
-                <AuthGuard>
-                  <CreateInvoicePage />
-                </AuthGuard>
-              } />
-              <Route path="/profile" element={
-                <AuthGuard>
-                  <ProfilePage />
-                </AuthGuard>
-              } />
-              <Route path="/dashboard" element={
-                <AuthGuard>
-                  <IncomeDashboardPage />
-                </AuthGuard>
-              } />
-            </Route>
-          </Routes>
-        </Router>
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            <Route index element={<HomePage />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="/verify-email" element={<VerifyEmailPage />} />
+            <Route path="/create-invoice" element={
+              <AuthGuard>
+                <CreateInvoicePage />
+              </AuthGuard>
+            } />
+            <Route path="/profile" element={
+              <AuthGuard>
+                <ProfilePage />
+              </AuthGuard>
+            } />
+            <Route path="/dashboard" element={
+              <AuthGuard>
+                <IncomeDashboardPage />
+              </AuthGuard>
+            } />
+          </Route>
+        </Routes>
       </AuthProvider>
     </ThemeProvider>
   )
 }
 
 export default App
+
