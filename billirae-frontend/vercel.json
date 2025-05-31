@@ -1,2 +1,5 @@
-ECHO ist eingeschaltet (ON).
-ECHO ist eingeschaltet (ON).
+{
+  "buildCommand": "cd billirae-frontend && npm run build",
+  "outputDirectory": "billirae-frontend/dist",
+  "framework": "vite"
+}
