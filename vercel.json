@@ -2,6 +2,5 @@
   "buildCommand": "cd billirae-frontend && npm run build",
   "outputDirectory": "billirae-frontend/dist",
   "installCommand": "cd billirae-frontend && npm install",
-  "framework": "vite",
-  "functions": {}
+  "framework": "vite"
 }
