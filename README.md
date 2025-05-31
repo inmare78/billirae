@@ -1,19 +1,4 @@
 # billirae
-Billirae
+Billirae - Invoice Management System
 
-# Billirae Frontend
-
-🚀 Minimaler Next.js Starter mit Supabase-Anbindung
-
-## Setup
-
-1. `.env.local` anlegen auf Basis von `.env.example`
-2. `npm install`
-3. `npm run dev` starten
-
-## Deployment
-
-Automatisch via GitHub CI/CD und Vercel
-
-<!-- Trigger CI/CD -->
-Trigger CI/CD test
+This is a dummy change for testing PR creation.

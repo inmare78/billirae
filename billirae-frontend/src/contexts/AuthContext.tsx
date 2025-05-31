@@ -1,64 +1,91 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Session, User } from '@supabase/supabase-js';
-import { supabase } from '../services/supabaseClient';
-import { parseSupabaseError } from '../utils/supabaseErrorHandler';
+import { createClient } from '@supabase/supabase-js';
 
-type AuthResult = {
-  success: boolean;
-  error?: string;
+// Initialize Supabase client
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Define types
+type User = {
+  id: string;
+  email: string;
+  name?: string;
 };
 
-interface AuthContextType {
+type AuthContextType = {
   user: User | null;
-  session: Session | null;
   loading: boolean;
-  error: string | null;
-  login: (email: string, password: string) => Promise<AuthResult>;
-  register: (email: string, password: string, name: string) => Promise<AuthResult>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  register: (email: string, password: string, name: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
-  resetError: () => void;
-}
+  isAuthenticated: boolean;
+};
 
+// Create context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+// Provider component
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
+  // Check for session on mount
   useEffect(() => {
-    const initializeAuth = async () => {
+    const checkSession = async () => {
       try {
-        setLoading(true);
-        
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const { data, error } = await supabase.auth.getSession();
         
         if (error) {
-          console.error('Error fetching session:', error);
-          setError(parseSupabaseError(error));
-        } else {
-          setSession(session);
-          setUser(session?.user || null);
+          console.error('Error checking session:', error);
+          setLoading(false);
+          return;
         }
-      } catch (err) {
-        console.error('Unexpected error during auth initialization:', err);
-        setError('Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.');
+
+        if (data.session) {
+          const { data: userData } = await supabase
+            .from('profiles')
+            .select('name')
+            .eq('id', data.session.user.id)
+            .single();
+
+          setUser({
+            id: data.session.user.id,
+            email: data.session.user.email || '',
+            name: userData?.name,
+          });
+          setIsAuthenticated(true);
+        }
+      } catch (error) {
+        console.error('Session check error:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    initializeAuth();
+    checkSession();
 
+    // Set up auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_, newSession) => {
-        setSession(newSession);
-        setUser(newSession?.user || null);
+      async (_event, session) => {
+        if (session) {
+          const { data: userData } = await supabase
+            .from('profiles')
+            .select('name')
+            .eq('id', session.user.id)
+            .single();
+
+          setUser({
+            id: session.user.id,
+            email: session.user.email || '',
+            name: userData?.name,
+          });
+          setIsAuthenticated(true);
+        } else {
+          setUser(null);
+          setIsAuthenticated(false);
+        }
         setLoading(false);
       }
     );
@@ -68,104 +95,80 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
   }, []);
 
+  // Login function
   const login = async (email: string, password: string) => {
     try {
-      setLoading(true);
-      setError(null);
-
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
-        setError(parseSupabaseError(error));
-        return { success: false, error: parseSupabaseError(error) };
+        return { success: false, error: error.message };
       }
 
       return { success: true };
-    } catch (err) {
-      const errorMessage = 'Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.';
-      setError(errorMessage);
-      return { success: false, error: errorMessage };
-    } finally {
-      setLoading(false);
+    } catch (error) {
+      console.error('Login error:', error);
+      return { success: false, error: 'Ein unerwarteter Fehler ist aufgetreten.' };
     }
   };
 
+  // Register function
   const register = async (email: string, password: string, name: string) => {
     try {
-      setLoading(true);
-      setError(null);
-
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          data: {
-            name,
-          },
-        },
       });
 
       if (error) {
-        setError(parseSupabaseError(error));
-        return { success: false, error: parseSupabaseError(error) };
+        return { success: false, error: error.message };
+      }
+
+      if (data.user) {
+        // Create profile entry
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert([{ id: data.user.id, name, email }]);
+
+        if (profileError) {
+          console.error('Profile creation error:', profileError);
+          return { success: false, error: 'Fehler beim Erstellen des Profils.' };
+        }
       }
 
       return { success: true };
-    } catch (err) {
-      const errorMessage = 'Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es später erneut.';
-      setError(errorMessage);
-      return { success: false, error: errorMessage };
-    } finally {
-      setLoading(false);
+    } catch (error) {
+      console.error('Registration error:', error);
+      return { success: false, error: 'Ein unerwarteter Fehler ist aufgetreten.' };
     }
   };
 
+  // Logout function
   const logout = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const { error } = await supabase.auth.signOut();
-      
-      if (error) {
-        setError(parseSupabaseError(error));
-      }
-    } catch (err) {
-      setError('Ein Fehler ist beim Abmelden aufgetreten.');
-    } finally {
-      setLoading(false);
-    }
+    await supabase.auth.signOut();
+    setUser(null);
+    setIsAuthenticated(false);
   };
 
-  const resetError = () => {
-    setError(null);
-  };
-
-  const value: AuthContextType = {
+  const value = {
     user,
-    session,
     loading,
-    error,
     login,
     register,
     logout,
-    resetError,
+    isAuthenticated,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
+// Custom hook to use auth context
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
-  
   return context;
 };
-
-export default AuthContext;

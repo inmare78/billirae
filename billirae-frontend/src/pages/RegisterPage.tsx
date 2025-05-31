@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Alert, AlertDescription } from '../components/ui/alert';
+import { useAuth } from '../contexts/AuthContext';
 
 const RegisterPage: React.FC = () => {
   const [name, setName] = useState('');
@@ -13,6 +14,9 @@ const RegisterPage: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  const { register } = useAuth();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,11 +30,17 @@ const RegisterPage: React.FC = () => {
     setLoading(true);
     
     try {
-      console.log('Registration attempt with:', { name, email });
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const result = await register(email, password, name);
       
+      if (!result.success) {
+        setError(result.error || 'Registrierung fehlgeschlagen. Bitte versuchen Sie es erneut.');
+      } else {
+        navigate('/dashboard'); // Navigate to dashboard after successful registration
+        console.log('Registration successful, navigating to dashboard');
+      }
     } catch (err) {
-      setError('Registrierung fehlgeschlagen. Bitte versuchen Sie es erneut.');
+      setError('Ein unerwarteter Fehler ist aufgetreten.');
+      console.error(err);
     } finally {
       setLoading(false);
     }

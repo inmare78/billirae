@@ -1,16 +1,20 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Alert, AlertDescription } from '../components/ui/alert';
+import { useAuth } from '../contexts/AuthContext';
 
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  const { login } = useAuth();
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,11 +22,17 @@ const LoginPage: React.FC = () => {
     setLoading(true);
     
     try {
-      console.log('Login attempt with:', { email });
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const result = await login(email, password);
       
+      if (!result.success) {
+        setError(result.error || 'Anmeldung fehlgeschlagen. Bitte überprüfen Sie Ihre Anmeldedaten.');
+      } else {
+        navigate('/dashboard'); // Navigate to dashboard after successful login
+        console.log('Login successful, navigating to dashboard');
+      }
     } catch (err) {
-      setError('Anmeldung fehlgeschlagen. Bitte überprüfen Sie Ihre Anmeldedaten.');
+      setError('Ein unerwarteter Fehler ist aufgetreten.');
+      console.error(err);
     } finally {
       setLoading(false);
     }
