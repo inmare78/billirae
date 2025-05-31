@@ -1,7 +1,7 @@
 {
-  "buildCommand": "cd billirae-frontend && npm run build",
-  "outputDirectory": "billirae-frontend/dist",
-  "installCommand": "cd billirae-frontend && npm install",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "installCommand": "npm install",
   "framework": "vite",
   "rewrites": [
     { "source": "/(.*)", "destination": "/" }
