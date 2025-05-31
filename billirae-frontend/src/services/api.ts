@@ -1,11 +1,5 @@
 import axios from 'axios';
 
-declare global {
-  interface ImportMeta {
-    env: Record<string, string>;
-  }
-}
-
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
 const api = axios.create({
