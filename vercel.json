@@ -2,5 +2,11 @@
   "buildCommand": "cd billirae-frontend && npm run build",
   "outputDirectory": "billirae-frontend/dist",
   "installCommand": "cd billirae-frontend && npm install",
-  "framework": "vite"
+  "framework": "vite",
+  "functions": {
+    "api/*.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  }
 }
